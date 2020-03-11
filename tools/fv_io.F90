@@ -148,7 +148,7 @@ contains
           call register_variable_attribute(file_obj,axisname, "axis", "Z")
           if (allocated(buffer)) deallocate(buffer)
           allocate(buffer(zsize(i)))
-          do j = 1, zsize(j)
+          do j = 1, zsize(i)
             buffer(j) = j
           end do
           call write_data(file_obj, axisname, buffer)
@@ -156,6 +156,16 @@ contains
         endif
       end do
     endif
+
+    call register_axis(file_obj, "Time", unlimited)
+    if (.not. file_obj%is_readonly) then !if writing file
+       call register_field(file_obj, "Time", "double", (/"Time"/))
+       call register_variable_attribute(file_obj, "Time", "cartesian_axis", "T")
+       call register_variable_attribute(file_obj, "Time", "units", "time level")
+       call register_variable_attribute(file_obj, "Time", "long_name", "Time")
+       call write_data(file_obj, "Time", 1)
+    endif
+
   end subroutine
 
   subroutine register_fv_core_res(Fv_restart, Atm)
@@ -164,8 +174,13 @@ contains
 
     integer :: i, j
     integer, dimension(:), allocatable :: buffer
+    character(len=8), dimension(2)             :: dim_names
+
+   dim_names =  (/"xaxis_1", "Time"/)
 
    call register_axis(Fv_restart, "xaxis_1", size(Atm%ak(:), 1))
+   call register_axis(Fv_restart, "Time", unlimited)
+
    if (.not. Fv_restart%is_readonly) then !if writing file
       call register_field(Fv_restart, "xaxis_1", "double", (/"xaxis_1"/))
       call register_variable_attribute(Fv_restart,"xaxis_1", "axis", "X")
@@ -176,10 +191,16 @@ contains
       end do
       call write_data(Fv_restart, "xaxis_1", buffer)
       deallocate(buffer)
+
+      call register_field(Fv_restart, "Time", "double", (/"Time"/))
+      call register_variable_attribute(Fv_restart, dim_names(2), "cartesian_axis", "T")
+      call register_variable_attribute(Fv_restart, dim_names(2), "units", "time level")
+      call register_variable_attribute(Fv_restart, dim_names(2), "long_name", dim_names(2))
+      call write_data(Fv_restart, "Time", 1)
    endif
 
-    call register_restart_field (Fv_restart, 'ak', Atm%ak(:))
-    call register_restart_field (Fv_restart, 'bk', Atm%bk(:))
+    call register_restart_field (Fv_restart, 'ak', Atm%ak(:), dim_names)
+    call register_restart_field (Fv_restart, 'bk', Atm%bk(:), dim_names)
 
   end subroutine register_fv_core_res
 
@@ -219,27 +240,34 @@ contains
     integer, dimension(numx) :: xpos
     integer, dimension(numy) :: ypos
     integer, dimension(numz) :: zsize
+    character(len=8), dimension(4)             :: dim_names_4d, dim_names_4d2, dim_names_4d3
+    character(len=8), dimension(3)             :: dim_names_3d
+
+    dim_names_4d =  (/"xaxis_1", "yaxis_1", "zaxis_1", "Time"/)
+    dim_names_4d2 =  (/"xaxis_2", "yaxis_2", "zaxis_1", "Time"/)
+    dim_names_4d3 =  (/"xaxis_1", "yaxis_2", "zaxis_1", "Time"/)
+    dim_names_3d =  (/"xaxis_1", "yaxis_2", "Time"/)
 
     xpos = (/CENTER, EAST/)
-    ypos = (/CENTER, NORTH/)
+    ypos = (/NORTH, CENTER/)
     zsize = (/size(Atm%u,3)/)
 
     call register_fv_axis(Fv_restart_tile, numx=numx, numy=numy, xpos=xpos, ypos=ypos, numz=numz, zsize=zsize)
-    call register_restart_field(Fv_restart_tile, 'u', Atm%u)
-    call register_restart_field(Fv_restart_tile, 'v', Atm%v)
+    call register_restart_field(Fv_restart_tile, 'u', Atm%u, dim_names_4d)
+    call register_restart_field(Fv_restart_tile, 'v', Atm%v, dim_names_4d2)
 
     if (.not.Atm%flagstruct%hydrostatic) then
-      call register_restart_field(Fv_restart_tile,  'W', Atm%w)
-      call register_restart_field(Fv_restart_tile,  'DZ', Atm%delz)
+      call register_restart_field(Fv_restart_tile,  'W', Atm%w, dim_names_4d3)
+      call register_restart_field(Fv_restart_tile,  'DZ', Atm%delz, dim_names_4d3)
 
       if ( Atm%flagstruct%hybrid_z ) then
         call register_restart_field(Fv_restart_tile,  'ZE0', Atm%ze0)
       endif
     endif
 
-    call register_restart_field(Fv_restart_tile,  'T', Atm%pt)
-    call register_restart_field(Fv_restart_tile,  'delp', Atm%delp)
-    call register_restart_field(Fv_restart_tile,  'phis', Atm%phis)
+    call register_restart_field(Fv_restart_tile,  'T', Atm%pt, dim_names_4d3)
+    call register_restart_field(Fv_restart_tile,  'delp', Atm%delp, dim_names_4d3)
+    call register_restart_field(Fv_restart_tile,  'phis', Atm%phis, dim_names_3d)
 
 !--- include agrid winds in restarts for use in data assimilation
 
@@ -259,25 +287,28 @@ contains
     integer, dimension(numz) :: zsize
     integer :: ntprog, nt, ntracers
     character(len=64) :: tracer_name
+    character(len=8), dimension(4)             :: dim_names
 
+    dim_names =  (/"xaxis_1", "yaxis_1", "zaxis_1", "Time"/)
     xpos = (/CENTER/)
     ypos = (/CENTER/)
     zsize = (/size(Atm%q,3)/)
 
+    call get_number_tracers(MODEL_ATMOS, num_tracers=ntracers, num_prog=ntprog)
     call register_fv_axis(Tra_restart, numx=numx, numy=numy, xpos=xpos, ypos=ypos, numz=numz, zsize=zsize)
     do nt = 1, ntprog
       call get_tracer_names(MODEL_ATMOS, nt, tracer_name)
       ! set all tracers to an initial profile value
       call set_tracer_profile (MODEL_ATMOS, nt, Atm%q(:,:,:,nt)  )
       call register_restart_field(Tra_restart, tracer_name, Atm%q(:,:,:,nt), &
-                   is_optional=.true.)
+                   dim_names, is_optional=.true.)
    enddo
    do nt = ntprog+1, ntracers
       call get_tracer_names(MODEL_ATMOS, nt, tracer_name)
       ! set all tracers to an initial profile value
       call set_tracer_profile (MODEL_ATMOS, nt, Atm%qdiag(:,:,:,nt)  )
       call register_restart_field(Tra_restart, tracer_name, Atm%qdiag(:,:,:,nt), &
-                   is_optional=.true.)
+                   dim_names, is_optional=.true.)
    enddo
     ntprog = size(Atm%q,4)
 
@@ -290,16 +321,18 @@ contains
     integer, parameter :: numx=1, numy=1
     integer, dimension(numx) :: xpos
     integer, dimension(numy) :: ypos
+    character(len=8), dimension(3)             :: dim_names
 
     xpos = (/CENTER/)
     ypos = (/CENTER/)
 
+    dim_names =  (/"xaxis_1", "yaxis_1", "Time"/)
     call register_fv_axis(Rsf_restart, numx=numx, numy=numy, xpos=xpos, ypos=ypos)
-    call register_restart_field(Rsf_restart, 'u_srf', Atm%u_srf)
-    call register_restart_field(Rsf_restart, 'v_srf', Atm%v_srf)
-    #ifdef SIM_PHYS
-    call register_restart_field(Rsf_restart, 'ts', Atm%ts)
-    #endif
+    call register_restart_field(Rsf_restart, 'u_srf', Atm%u_srf, dim_names)
+    call register_restart_field(Rsf_restart, 'v_srf', Atm%v_srf, dim_names)
+#ifdef SIM_PHYS
+    call register_restart_field(Rsf_restart, 'ts', Atm%ts, dim_names)
+#endif
 
   endsubroutine register_fv_srf_wnd_res
   !#####################################################################
@@ -675,11 +708,11 @@ contains
 
        if (tile_file_exists) then
           call register_fv_core_res_tile(Fv_restart_tile, Atm(n))
-          call write_restart (Fv_restart)
-          call close_file (Fv_restart)
+          call write_restart (Fv_restart_tile)
+          call close_file (Fv_restart_tile)
        endif
 
-       if (open_file(Rsf_restart,"RESTART/fv_srf_wnd.res","overwrite", fv_domain, is_restart=.true.)) then
+       if (open_file(Rsf_restart,"RESTART/fv_srf_wnd.res.nc","overwrite", fv_domain, is_restart=.true.)) then
           call register_fv_srf_wnd_res(Rsf_restart, Atm(n))
           call write_restart (Rsf_restart)
           call close_file (Rsf_restart)
@@ -699,7 +732,7 @@ contains
           endif
        endif
 
-       if (open_file(Tra_restart,"RESTART/fv_land.res.nc","overwrite",fv_domain, is_restart=.true.)) then
+       if (open_file(Tra_restart,"RESTART/fv_tracer.res.nc","overwrite",fv_domain, is_restart=.true.)) then
           call register_fv_tracer_res(Tra_restart, Atm(n))
           call write_restart(Tra_restart)
           call close_file(Tra_restart)
