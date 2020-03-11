@@ -100,8 +100,152 @@ contains
   end subroutine fv_io_exit
   ! </SUBROUTINE> NAME="fv_io_exit"
 
+  subroutine register_fv_axis(file_obj, numx, numy, xpos, ypos, numz, zsize)
+    type(FmsNetcdfDomainFile_t), intent(inout) ::  file_obj
+    integer, intent(in) :: numx, numy, 
+    integer, intent(in), optional :: numz
+    integer, dimension(:), intent(in) :: xpos, ypos
+    integer, dimension(:), intent(in), optional :: zsize
 
+    integer :: i, ie, is
+    integer, dimension(:), allocatable :: buffer
+    character(len=1) :: suffix
 
+    do i=1, numx
+      write(suffix,'(I1)') i
+      axisname = 'xaxis_'//suffix
+      call register_axis(file_obj, axisname, 'X', domain_position=xpos(i))
+      if (.not. file_obj%is_readonly) then !if writing file
+        call register_field(file_obj, axisname, "double", (/axisname/))
+        call register_variable_attribute(file_obj,axisname, "axis", "X")
+        call get_global_io_domain_indices(file_obj, axisname, is, ie, buffer)
+        call write_data(file_obj, axisname, buffer)
+      endif
+    end do
+
+    do i=1, numy
+      write(suffix,'(I1)') i
+      axisname = 'yaxis_'//suffix
+      call register_axis(file_obj, axisname, 'Y', domain_position=ypos(i))
+      if (.not. file_obj%is_readonly) then !if writing file
+        call register_field(file_obj, axisname, "double", (/axisname/))
+        call register_variable_attribute(file_obj,axisname, "axis", "Y")
+        call get_global_io_domain_indices(file_obj, axisname, is, ie, buffer)
+        call write_data(file_obj, axisname, buffer)
+      endif
+    end do 
+
+    if (present(numz)) then 
+      do i= 1, numz
+        write(suffix,'(I1)') i
+        axisname = 'zaxis_'//suffix
+        call register_axis(file_obj, axisname, zsize(i))
+        if (.not. file_obj%is_readonly) then !if writing file
+          call register_field(file_obj, axisname, "double", (/axisname/))
+          call register_variable_attribute(file_obj,axisname, "axis", "Z")
+          if (allocated(buffer)) deallocate(buffer)
+          allocate(buffer(zsize(i)))
+          do j = 1, zsize(j)
+            buffer(j) = j    
+          end do
+          call write_data(file_obj, axisname, buffer)
+          deallocate(buffer)
+        endif
+      end do
+    endif
+  end subroutine
+
+  subroutine register_fv_core_res_tile(Fv_restart_tile, Atm)
+    type(fv_atmos_type), intent(inout) :: Atm
+    type(FmsNetcdfDomainFile_t), intent(inout) ::  Fv_restart_tile
+
+    integer :: numx=2, numy=2, numz=1
+    integer, dimension(numx) :: xpos
+    integer, dimension(numy) :: ypos
+    integer, dimension(numz) :: zsize
+
+    xpos = (/CENTER, EAST/)
+    ypos = (/CENTER, NORTH/)
+    zsize = (/size(Atm%u,3)/)
+
+    call register_fv_axis(Fv_restart_tile, numx, numy, xpos, ypos, numz=numz, zsize=zsize)
+    call register_restart_field(Fv_restart_tile, 'u', Atm%u)
+    call register_restart_field(Fv_restart_tile, 'v', Atm%v)
+
+    if (.not.Atm%flagstruct%hydrostatic) then
+      call register_restart_field(Fv_restart_tile,  'W', Atm%w)
+      call register_restart_field(Fv_restart_tile,  'DZ', Atm%delz)
+
+      if ( Atm%flagstruct%hybrid_z ) then
+        call register_restart_field(Fv_restart_tile,  'ZE0', Atm%ze0)
+      endif
+    endif
+
+    call register_restart_field(Fv_restart_tile,  'T', Atm%pt)
+    call register_restart_field(Fv_restart_tile,  'delp', Atm%delp)
+    call register_restart_field(Fv_restart_tile,  'phis', Atm%phis)
+
+!--- include agrid winds in restarts for use in data assimilation 
+
+    if (Atm%flagstruct%agrid_vel_rst) then
+      call register_restart_field(Fv_restart_tile,  'ua', Atm%ua)
+      call register_restart_field(Fv_restart_tile,  'va', Atm%va)
+    endif
+  end subroutine register_fv_core_res_tile
+
+  subroutine register_fv_tracer_res(Tra_restart, Atm)
+    type(fv_atmos_type), intent(inout) :: Atm
+    type(FmsNetcdfDomainFile_t), intent(inout) ::  Tra_restart
+
+    integer :: numx=1, numy=1, numz=1
+    integer, dimension(numx) :: xpos
+    integer, dimension(numy) :: ypos
+    integer, dimension(numz) :: zsize
+    integer :: ntprog 
+    character(len=64) :: tracer_name
+
+    xpos = (/CENTER/)
+    ypos = (/CENTER/)
+    zsize = (/size(Atm%q,3)/)
+
+    call register_fv_axis(Fv_restart_tile, numx, numy, xpos, ypos, numz=numz, zsize=zsize)
+    do nt = 1, ntprog
+      call get_tracer_names(MODEL_ATMOS, nt, tracer_name)
+      ! set all tracers to an initial profile value
+      call set_tracer_profile (MODEL_ATMOS, nt, Atm%q(:,:,:,nt)  )
+      call register_restart_field(Tra_restart, tracer_name, Atm%q(:,:,:,nt), &
+                   is_optional=.true.)
+   enddo
+   do nt = ntprog+1, ntracers
+      call get_tracer_names(MODEL_ATMOS, nt, tracer_name)
+      ! set all tracers to an initial profile value
+      call set_tracer_profile (MODEL_ATMOS, nt, Atm%qdiag(:,:,:,nt)  )
+      call register_restart_field(Tra_restart, tracer_name, Atm%qdiag(:,:,:,nt), &
+                   is_optional=.true.)
+   enddo
+    ntprog = size(Atm%q,4)
+
+  end subroutine register_fv_tracer_res
+
+  subroutine register_fv_srf_wnd_res(Rsf_restart, Atm)
+    type(fv_atmos_type), intent(inout) :: Atm
+    type(FmsNetcdfDomainFile_t), intent(inout) ::  Rsf_restart
+
+    integer :: numx=1, numy=1
+    integer, dimension(numx) :: xpos
+    integer, dimension(numy) :: ypos
+
+    xpos = (/CENTER/)
+    ypos = (/CENTER/)
+
+    call register_fv_axis(Fv_restart_tile, numx, numy, xpos, ypos)
+    call register_restart_field(Rsf_restart, 'u_srf', Atm%u_srf)
+    call register_restart_field(Rsf_restart, 'v_srf', Atm%v_srf)
+    #ifdef SIM_PHYS
+    call register_restart_field(Rsf_restart, 'ts', Atm%ts)
+    #endif
+
+  endsubroutine register_fv_srf_wnd_res
   !#####################################################################
   ! <SUBROUTINE NAME="fv_io_read_restart">
   !
@@ -120,10 +264,14 @@ contains
     real                 :: ptop
 
     character(len=128)           :: tracer_longname, tracer_units
+    type(FmsNetcdfFile_t)       ::  Fv_restart
+    type(FmsNetcdfDomainFile_t) ::  Fv_restart_tile, Tra_restart, Rsf_restart, Mg_restart, Lnd_restart
 
-    ntileMe = size(Atm(:))  ! This will need mods for more than 1 tile per pe
-
-    call restore_state(Atm(1)%Fv_restart)
+    if (open_file(Fv_restart,"INPUT/fv_core.res.nc","read", is_restart=.true.)) then
+      call read_data (Fv_restart, 'ak', Atm(1)%ak(:))
+      call read_data (Fv_restart, 'bk', Atm(1)%bk(:))
+      call close_file(Fv_restart)
+    endif
 
     if ( use_ncep_sst .or. Atm(1)%flagstruct%nudge .or. Atm(1)%flagstruct%ncep_ic ) then
        call mpp_error(NOTE, 'READING FROM SST_RESTART DISABLED')
@@ -137,47 +285,52 @@ contains
     else
        stile_name = ''
     endif
+
+    if (open_file(Fv_restart_tile,"INPUT/fv_core.res.nc","read", fv_domain, is_restart=.true.)) then
+      call register_fv_core_res_tile(Fv_restart_tile, Atm)
+      call read_restart(Fv_restart_tile)
+      call close_file(Fv_restart_tile)
+    endif
  
-    do n = 1, ntileMe
-       call restore_state(Atm(n)%Fv_tile_restart)
+!--- restore data for fv_tracer - if it exists   
+    fname = 'INPUT/fv_tracer.res'//trim(stile_name)//'.nc'
+    if (open_file(Tra_restart,fname,"read", fv_domain, is_restart=.true.)) then
+      call register_fv_tracer_res(Tra_restart, Atm)
+      call read_restart(Tra_restart)
+      call close_file(Tra_restart)
+    else
+      call mpp_error(NOTE,'==> Warning from fv_read_restart: Expected file '//trim(fname)//' does not exist')
+    endif
 
-!--- restore data for fv_tracer - if it exists
-       fname = 'INPUT/fv_tracer.res'//trim(stile_name)//'.nc'
-       if (file_exist(fname)) then
-         call restore_state(Atm(n)%Tra_restart)
-       else
-         call mpp_error(NOTE,'==> Warning from fv_read_restart: Expected file '//trim(fname)//' does not exist')
-       endif
+!--- restore data for surface winds - if it exists   
+    fname = 'INPUT/fv_srf_wnd.res'//trim(stile_name)//'.nc'
+    if (open_file(Rsf_restart,fname,"read", fv_domain, is_restart=.true.)) then
+      call register_fv_srf_wnd_res(Rsf_restart, Atm)
+      call read_restart(Rsf_restart)
+      call close_file(Rsf_restart)
+    else
+      call mpp_error(NOTE,'==> Warning from fv_read_restart: Expected file '//trim(fname)//' does not exist')
+      Atm%flagstruct%srf_init = .false.
+    endif
 
-!--- restore data for surface winds - if it exists
-       fname = 'INPUT/fv_srf_wnd.res'//trim(stile_name)//'.nc'
-       if (file_exist(fname)) then
-         call restore_state(Atm(n)%Rsf_restart)
-         Atm(n)%flagstruct%srf_init = .true.
-       else
-         call mpp_error(NOTE,'==> Warning from fv_read_restart: Expected file '//trim(fname)//' does not exist')
-         Atm(n)%flagstruct%srf_init = .false.
-       endif
-
-       if ( Atm(n)%flagstruct%fv_land ) then
+    if ( Atm%flagstruct%fv_land ) then
 !--- restore data for mg_drag - if it exists
          fname = 'INPUT/mg_drag.res'//trim(stile_name)//'.nc'
-         if (file_exist(fname)) then
-           call restore_state(Atm(n)%Mg_restart)
+         if (open_file(Mg_restart,fname,"read", fv_domain, is_restart=.true.)) then
+          call read_restart(Mg_restart)
+          call close_file(Mg_restart)
          else
            call mpp_error(NOTE,'==> Warning from fv_read_restart: Expected file '//trim(fname)//' does not exist')
          endif
 !--- restore data for fv_land - if it exists
          fname = 'INPUT/fv_land.res'//trim(stile_name)//'.nc'
-         if (file_exist(fname)) then
-           call restore_state(Atm(n)%Lnd_restart)
+         if (open_file(Lnd_restart,fname,"read", fv_domain, is_restart=.true.)) then
+          call read_restart(Lnd_restart)
+          call close_file(Lnd_restart)
          else
            call mpp_error(NOTE,'==> Warning from fv_read_restart: Expected file '//trim(fname)//' does not exist')
          endif
-       endif
-
-    end do
-
+    endif
     return
 
   end subroutine  fv_io_read_restart
@@ -425,133 +578,6 @@ contains
 
   end subroutine  fv_io_register_nudge_restart
   ! </SUBROUTINE> NAME="fv_io_register_nudge_restart"
-
-
-  !#####################################################################
-  ! <SUBROUTINE NAME="fv_io_register_restart">
-  !
-  ! <DESCRIPTION>
-  !   register restart field to be written out to restart file. 
-  ! </DESCRIPTION>
-  subroutine  fv_io_register_restart(fv_domain,Atm)
-    type(domain2d),      intent(inout) :: fv_domain
-    type(fv_atmos_type), intent(inout) :: Atm(:)
-
-    character(len=64) :: fname, tracer_name
-    character(len=6)  :: gn, stile_name
-    integer           :: id_restart
-    integer           :: n, nt, ntracers, ntprog, ntdiag, ntileMe, ntiles
-
-    ntileMe = size(Atm(:)) 
-    ntprog = size(Atm(1)%q,4) 
-    ntdiag = size(Atm(1)%qdiag,4) 
-    ntracers = ntprog+ntdiag
-
-!--- set the 'nestXX' appendix for all files using fms_io
-    if (Atm(1)%grid_number > 1) then
-       write(gn,'(A4, I2.2)') "nest", Atm(1)%grid_number
-    else
-       gn = ''
-    end if
-    call set_filename_appendix(gn)
-
-!--- fix for single tile runs where you need fv_core.res.nc and fv_core.res.tile1.nc
-    ntiles = mpp_get_ntile_count(fv_domain)
-    if(ntiles == 1 .and. .not. Atm(1)%neststruct%nested) then
-       stile_name = '.tile1'
-    else
-       stile_name = ''
-    endif
-
-! use_ncep_sst may not be initialized at this point?
-#ifndef DYCORE_SOLO
-    call mpp_error(NOTE, 'READING FROM SST_RESTART DISABLED')
-!!$   if ( use_ncep_sst .or. Atm(1)%flagstruct%nudge .or. Atm(1)%flagstruct%ncep_ic ) then
-!!$       fname = 'sst_ncep'//trim(gn)//'.res.nc'
-!!$       id_restart = register_restart_field(Atm(1)%SST_restart, fname, 'sst_ncep', sst_ncep)
-!!$       id_restart = register_restart_field(Atm(1)%SST_restart, fname, 'sst_anom', sst_anom)
-!!$   endif
-#endif
-
-    fname = 'fv_core.res.nc'
-    id_restart = register_restart_field(Atm(1)%Fv_restart, fname, 'ak', Atm(1)%ak(:), no_domain=.true.)
-    id_restart = register_restart_field(Atm(1)%Fv_restart, fname, 'bk', Atm(1)%bk(:), no_domain=.true.) 
-
-    do n = 1, ntileMe
-       fname = 'fv_core.res'//trim(stile_name)//'.nc'
-       id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'u', Atm(n)%u, &
-                     domain=fv_domain, position=NORTH,tile_count=n)
-       id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'v', Atm(n)%v, &
-                     domain=fv_domain, position=EAST,tile_count=n)
-       if (.not.Atm(n)%flagstruct%hydrostatic) then
-          id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'W', Atm(n)%w, &
-                        domain=fv_domain, mandatory=.false., tile_count=n)
-          id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'DZ', Atm(n)%delz, &
-                        domain=fv_domain, mandatory=.false., tile_count=n)
-          if ( Atm(n)%flagstruct%hybrid_z ) then
-             id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'ZE0', Atm(n)%ze0, &
-                           domain=fv_domain, mandatory=.false., tile_count=n)
-          endif
-       endif
-       id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'T', Atm(n)%pt, &
-                     domain=fv_domain, tile_count=n)
-       id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'delp', Atm(n)%delp, &
-                     domain=fv_domain, tile_count=n)
-       id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'phis', Atm(n)%phis, &
-                     domain=fv_domain, tile_count=n)
-
-       !--- include agrid winds in restarts for use in data assimilation 
-       if (Atm(n)%flagstruct%agrid_vel_rst) then
-         id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'ua', Atm(n)%ua, &
-                       domain=fv_domain, tile_count=n, mandatory=.false.)
-         id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'va', Atm(n)%va, &
-                       domain=fv_domain, tile_count=n, mandatory=.false.)
-       endif
-
-       fname = 'fv_srf_wnd.res'//trim(stile_name)//'.nc'
-       id_restart =  register_restart_field(Atm(n)%Rsf_restart, fname, 'u_srf', Atm(n)%u_srf, &
-                     domain=fv_domain, tile_count=n)
-       id_restart =  register_restart_field(Atm(n)%Rsf_restart, fname, 'v_srf', Atm(n)%v_srf, &
-                     domain=fv_domain, tile_count=n)
-#ifdef SIM_PHYS
-       id_restart =  register_restart_field(Rsf_restart(n), fname, 'ts', Atm(n)%ts, &
-                     domain=fv_domain, tile_count=n)
-#endif
-
-       if ( Atm(n)%flagstruct%fv_land ) then
-          !-------------------------------------------------------------------------------------------------
-          ! Optional terrain deviation (sgh) and land fraction (oro)
-          fname = 'mg_drag.res'//trim(stile_name)//'.nc'
-          id_restart =  register_restart_field(Atm(n)%Mg_restart, fname, 'ghprime', Atm(n)%sgh, &
-                        domain=fv_domain, tile_count=n)  
-
-          fname = 'fv_land.res'//trim(stile_name)//'.nc'
-          id_restart = register_restart_field(Atm(n)%Lnd_restart, fname, 'oro', Atm(n)%oro, &
-                        domain=fv_domain, tile_count=n)
-       endif
-
-       fname = 'fv_tracer.res'//trim(stile_name)//'.nc'
-       do nt = 1, ntprog
-          call get_tracer_names(MODEL_ATMOS, nt, tracer_name)
-          ! set all tracers to an initial profile value
-          call set_tracer_profile (MODEL_ATMOS, nt, Atm(n)%q(:,:,:,nt)  )
-          id_restart = register_restart_field(Atm(n)%Tra_restart, fname, tracer_name, Atm(n)%q(:,:,:,nt), &
-                       domain=fv_domain, mandatory=.false., tile_count=n)
-       enddo
-       do nt = ntprog+1, ntracers
-          call get_tracer_names(MODEL_ATMOS, nt, tracer_name)
-          ! set all tracers to an initial profile value
-          call set_tracer_profile (MODEL_ATMOS, nt, Atm(n)%qdiag(:,:,:,nt)  )
-          id_restart = register_restart_field(Atm(n)%Tra_restart, fname, tracer_name, Atm(n)%qdiag(:,:,:,nt), &
-                       domain=fv_domain, mandatory=.false., tile_count=n)
-       enddo
-
-    enddo
-
-  end subroutine  fv_io_register_restart
-  ! </SUBROUTINE> NAME="fv_io_register_restart"
-
-
 
   !#####################################################################
   ! <SUBROUTINE NAME="fv_io_write_restart">

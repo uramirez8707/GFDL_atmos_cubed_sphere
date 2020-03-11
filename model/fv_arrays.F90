@@ -21,7 +21,6 @@
 module fv_arrays_mod
 #include <fms_platform.h>
   use mpp_domains_mod,       only: domain2d
-  use fms_io_mod,            only: restart_file_type
   use time_manager_mod,      only: time_type
   use horiz_interp_type_mod, only: horiz_interp_type
   use mpp_domains_mod,       only: nest_domain_type
@@ -581,8 +580,6 @@ module fv_arrays_mod
 
      !These are for tracer flux BCs
      logical :: do_flux_BCs, do_2way_flux_BCs !For a parent grid; determine whether there is a need to send BCs
-     type(restart_file_type) :: BCfile_ne, BCfile_sw
-
   end type fv_nest_type
 
   interface allocate_fv_nest_BC_type
@@ -736,9 +733,6 @@ module fv_arrays_mod
 !!!!!!!!!!!!!!
 ! From fv_io !
 !!!!!!!!!!!!!!
-     type(restart_file_type) :: Fv_restart, SST_restart, Fv_tile_restart, &
-          Rsf_restart, Mg_restart, Lnd_restart, Tra_restart
-
      type(fv_nest_type) :: neststruct
 
      !Hold on to coarse-grid global grid, so we don't have to waste processor time getting it again when starting to do grid nesting

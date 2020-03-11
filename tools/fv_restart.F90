@@ -205,8 +205,6 @@ contains
     npz     = Atm(1)%npz
     npz_rst = Atm(1)%flagstruct%npz_rst
 
-    !--- call fv_io_register_restart to register restart field to be written out in fv_io_write_restart
-    call fv_io_register_restart(Atm(n)%domain,Atm(n:n))
     if (Atm(n)%neststruct%nested) call fv_io_register_restart_BCs(Atm(n))
     if( .not.cold_start_grids(n) .and. (.not. Atm(n)%flagstruct%external_ic) ) then
 
