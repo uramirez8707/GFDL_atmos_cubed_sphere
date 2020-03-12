@@ -34,6 +34,7 @@ module fv_io_mod
   !</DESCRIPTION>
 
   use fms_mod,                 only: file_exist
+  ! Should remove fms_io_mod
   use fms_io_mod,              only: fms_io_exit, get_tile_string, &
                                      restart_file_type, register_restart_field, &
                                      save_restart, restore_state, &
@@ -41,6 +42,13 @@ module fv_io_mod
                                      get_mosaic_tile_file, get_instance_filename, &
                                      save_restart_border, restore_state_border, free_restart_type, &
                                      field_exist
+	use fms2_io_mod							 only: open_check, open_file, read_restart, close_file, &
+																		 check_if_open, get_global_io_domain_indices, &
+																		 fms2_register_restart_field => register_restart_field, &
+                                     FmsNetcdfFile_t, FmsNetcdfDomainFile_t, register_axis, &
+                                     variable_exists, unlimited, register_axis, register_field, &
+                                     register_variable_attribute, register_field, write_data, &
+                                     write_restart
   use mpp_mod,                 only: mpp_error, FATAL, NOTE, WARNING, mpp_root_pe, &
                                      mpp_sync, mpp_pe, mpp_declare_pelist
   use mpp_domains_mod,         only: domain2d, EAST, WEST, NORTH, CENTER, SOUTH, CORNER, &
@@ -57,6 +65,7 @@ module fv_io_mod
   use fv_eta_mod,              only: set_external_eta
 
   use fv_mp_mod,               only: mp_gather, is_master
+  ! Should remove fms_io_mod
   use fms_io_mod,              only: set_domain
   use fv_treat_da_inc_mod,     only: read_da_inc
 
@@ -119,12 +128,28 @@ contains
     integer              :: ntileMe
     integer              :: ks, ntiles
     real                 :: ptop
+    logical              :: file_open_success ! returned by call to fms2io:open_file
+    character(len=:),allocatable :: fms2_fname ! added by Tom
+    logical :: mg_open, lnd_open, fv_tile_open ! added by Tom
 
     character(len=128)           :: tracer_longname, tracer_units
 
     ntileMe = size(Atm(:))  ! This will need mods for more than 1 tile per pe
 
-    call restore_state(Atm(1)%Fv_restart)
+    !call restore_state(Atm(1)%Fv_restart)  << Old fms
+    fname = "INPUT/fv_core.res.nc"
+     if (.not.check_if_open(Atm(1)%Fv_restart2) .and. file_exist(fname)) then
+          file_open_success = .false.
+          file_open_success = open_file(Atm(1)%Fv_restart2, trim(fname), "read", &
+                                     is_restart=.true.)
+          if (.not.file_open_success) call mpp_error(FATAL, 'Can not open '//trim(fname))
+!          call open_check( open_file(Atm(1)%Fv_restart2, "INPUT/fv_core.res.nc", "read"))
+          call fms2_register_restart_field(Atm(1)%Fv_restart2,"ak",Atm(1)%ak)
+          call fms2_register_restart_field(Atm(1)%Fv_restart2,"bk",Atm(1)%bk)
+          call read_restart (Atm(1)%Fv_restart2)
+          call close_file (Atm(1)%Fv_restart2)
+     endif
+
     if (Atm(1)%flagstruct%external_eta) then
        call set_external_eta(Atm(1)%ak, Atm(1)%bk, Atm(1)%ptop, Atm(1)%ks)
     endif
@@ -136,27 +161,52 @@ contains
 
 ! fix for single tile runs where you need fv_core.res.nc and fv_core.res.tile1.nc
     ntiles = mpp_get_ntile_count(fv_domain)
-    if(ntiles == 1 .and. .not. Atm(1)%neststruct%nested) then
+    ! if(ntiles == 1 .and. .not. Atm(1)%neststruct%nested) then
+    if(ntiles >= 1 .and. .not. Atm(1)%neststruct%nested) then
        stile_name = '.tile1'
     else
        stile_name = ''
     endif
 
-    do n = 1, ntileMe
-       call restore_state(Atm(n)%Fv_tile_restart)
+    ! do n = 1, ntileMe
+       ! call restore_state(Atm(n)%Fv_tile_restart)
+    ntiles_loop: do n=1: ntileMe
+
+!> open tiled files
+     if (allocated (fms2_fname)) deallocate (fms2_fname)
+     fname = "INPUT/fv_core.res"//trim(stile_name)//".nc"
+     fms2_fname = "INPUT/fv_core.res.nc"
+     if (.not. file_exist(trim(fname))) call mpp_error(FATAL, trim(fname)//" does not exist and is required.")
+     if (.not.check_if_open(Atm(n)%Fv_tile_fms2_restart) ) then
+          fms2_fname = "INPUT/fv_core.res.nc"
+          file_open_success = .false.
+          file_open_success = open_file(Atm(n)%Fv_tile_fms2_restart, trim(fms2_fname), "read", &
+                                     domain=fv_domain, is_restart=.true.)
+          fv_tile_open = .true.
+          if (.not.file_open_success) call mpp_error(FATAL, 'Can not open '//trim(fname))
+     endif
 
 !--- restore data for fv_tracer - if it exists
        fname = 'INPUT/fv_tracer.res'//trim(stile_name)//'.nc'
        if (file_exist(fname)) then
-         call restore_state(Atm(n)%Tra_restart)
+         ! call restore_state(Atm(n)%Tra_restart)(fv_domain,Atm,Atm(n)%Tra_fms2_restart,.true.)
+         call fv_io_read_tracers(fv_domain,Atm,Atm(n)%Tra_fms2_restart,.true.)
        else
          call mpp_error(NOTE,'==> Warning from fv_read_restart: Expected file '//trim(fname)//' does not exist')
        endif
 
 !--- restore data for surface winds - if it exists
+       if (allocated (fms2_fname)) deallocate (fms2_fname)
        fname = 'INPUT/fv_srf_wnd.res'//trim(stile_name)//'.nc'
-       if (file_exist(fname)) then
-         call restore_state(Atm(n)%Rsf_restart)
+       ! if (file_exist(fname)) then
+         ! call restore_state(Atm(n)%Rsf_restart)
+         ! Atm(n)%flagstruct%srf_init = .true.
+       if (.not. check_if_open(Atm(n)%Rsf_fms2_restart) .and. file_exist(fname)) then
+         fms2_fname = 'INPUT/fv_srf_wnd.res.nc'
+         file_open_success = .false.
+         file_open_success = open_file(Atm(n)%Rsf_fms2_restart, trim(fms2_fname), "read", &
+                                    domain=fv_domain, is_restart=.true.)
+         if (.not. file_open_success) call mpp_error(FATAL, 'Can not open '//trim(fname))
          Atm(n)%flagstruct%srf_init = .true.
        else
          call mpp_error(NOTE,'==> Warning from fv_read_restart: Expected file '//trim(fname)//' does not exist')
@@ -165,22 +215,62 @@ contains
 
        if ( Atm(n)%flagstruct%fv_land ) then
 !--- restore data for mg_drag - if it exists
+       if (allocated (fms2_fname)) deallocate (fms2_fname)
          fname = 'INPUT/mg_drag.res'//trim(stile_name)//'.nc'
-         if (file_exist(fname)) then
-           call restore_state(Atm(n)%Mg_restart)
+         ! if (file_exist(fname)) then
+           ! call restore_state(Atm(n)%Mg_restart)
+         if (.not.check_if_open(Atm(n)%Mg_fms2_restart) .and. file_exist(fname)) then
+           fms2_fname = "INPUT/mg_drag.res.nc"
+           file_open_success = .false.
+           file_open_success = open_file(Atm(n)%Mg_fms2_restart, trim(fms2_fname), "read", &
+                                      domain=fv_domain, is_restart=.true.)
+           if (.not.file_open_success) call mpp_error(FATAL, 'Can not open '//trim(fname))
+           mg_open = .true.
          else
            call mpp_error(NOTE,'==> Warning from fv_read_restart: Expected file '//trim(fname)//' does not exist')
+           mg_open = .false.
          endif
 !--- restore data for fv_land - if it exists
+         if (allocated (fms2_fname)) deallocate (fms2_fname)
          fname = 'INPUT/fv_land.res'//trim(stile_name)//'.nc'
-         if (file_exist(fname)) then
-           call restore_state(Atm(n)%Lnd_restart)
+         ! if (file_exist(fname)) then
+           ! call restore_state(Atm(n)%Lnd_restart)
+         if (.not.check_if_open(Atm(n)%Lnd_fms2_restart) .and. file_exist(fname)) then
+           fms2_fname = "INPUT/fv_land.res.nc"
+           file_open_success = .false.
+           file_open_success = open_file(Atm(n)%Lnd_fms2_restart, trim(fms2_fname), "read", &
+                                      domain=fv_domain, is_restart=.true.)
+           if (.not.file_open_success) call mpp_error(FATAL, 'Can not open '//trim(fname))
+           lnd_open =.true.
          else
            call mpp_error(NOTE,'==> Warning from fv_read_restart: Expected file '//trim(fname)//' does not exist')
+           lnd_open = .false.
          endif
+       else:
+         mg_open = .false.
+         lnd_open = .false.
        endif
 
-    end do
+     call fv_io_register_restart(fv_domain,Atm,reading=.true.)
+     if (fv_tile_open) then
+          call read_restart (Atm(n)%Fv_tile_fms2_restart)
+          call close_file (Atm(n)%Fv_tile_fms2_restart)
+     endif
+
+     if (Atm(n)%flagstruct%srf_init) then
+          call read_restart (Atm(n)%Rsf_fms2_restart)
+          call close_file (Atm(n)%Rsf_fms2_restart)
+     endif
+     if (mg_open) then
+          call read_restart (Atm(n)%Mg_fms2_restart)
+          call close_file (Atm(n)%Mg_fms2_restart)
+     endif
+     if (lnd_open) then
+          call read_restart (Atm(n)%Lnd_fms2_restart)
+          call close_file (Atm(n)%Lnd_fms2_restart)
+     endif
+
+    enddo ntiles_loop
 
     return
 
@@ -189,14 +279,23 @@ contains
   !#####################################################################
 
 
-  subroutine fv_io_read_tracers(fv_domain,Atm)
+  subroutine fv_io_read_tracers(fv_domain,Atm,fms2fileobj,include_sphum)
     type(domain2d),      intent(inout) :: fv_domain
     type(fv_atmos_type), intent(inout) :: Atm(:)
+    type(FmsNetcdfDomainFile_t), intent(inout), optional :: fms2fileobj
+    logical, intent(in), optional :: include_sphum
     integer :: n, ntracers, ntprog, nt, isc, iec, jsc, jec, id_restart
     character(len=6) :: stile_name
     character(len=64):: fname, tracer_name
     type(restart_file_type) :: Tra_restart_r
     integer :: ntiles
+    integer :: varloop_start
+    logical :: file_open_success
+
+    varloop_start = 2
+    if(present(include_sphum)) then
+     if (include_sphum) varloop_start = 1
+    endif
 
     n = 1
     isc = Atm(n)%bd%isc
@@ -213,24 +312,57 @@ contains
        stile_name = ''
     endif
 
-    fname = 'fv_tracer.res'//trim(stile_name)//'.nc'
-    do nt = 2, ntprog
+    ! fname = 'fv_tracer.res'//trim(stile_name)//'.nc'
+    if (.not.present(fms2fileobj)) then
+     fname = 'fv_tracer.res'//trim(stile_name)//'.nc'
+    else
+     fname = 'INPUT/fv_tracer.res.nc'
+     file_open_success = .false.
+     file_open_success = open_file(fms2fileobj, trim(fname), "read", &
+                                   domain=fv_domain, nc_format="64bit", is_restart=.true.)
+     if (.not.file_open_success) call mpp_error(FATAL, 'Can not open '//trim(fname))
+     call register_axis(Atm(1)%Tra_fms2_restart, 'xaxis_1', 'X' )
+     call register_axis(Atm(1)%Tra_fms2_restart, 'yaxis_1', 'Y' )
+    endif
+    ! do nt = 2, ntprog
+    do nt = varloop_start, ntprog
        call get_tracer_names(MODEL_ATMOS, nt, tracer_name)
        call set_tracer_profile (MODEL_ATMOS, nt, Atm(n)%q(isc:iec,jsc:jec,:,nt)  )
-       id_restart = register_restart_field(Tra_restart_r, fname, tracer_name, Atm(n)%q(:,:,:,nt), &
-                    domain=fv_domain, mandatory=.false., tile_count=n)
+       ! id_restart = register_restart_field(Tra_restart_r, fname, tracer_name, Atm(n)%q(:,:,:,nt), &
+                    ! domain=fv_domain, mandatory=.false., tile_count=n)
+       if (.not.present(fms2fileobj)) then
+       else
+          if (variable_exists(fms2fileobj,trim(tracer_name)) )then
+               call fms2_register_restart_field(fms2fileobj,tracer_name,Atm(n)%q(:,:,:,nt))
+          endif
+       endif
     enddo
     do nt = ntprog+1, ntracers
        call get_tracer_names(MODEL_ATMOS, nt, tracer_name)
        call set_tracer_profile (MODEL_ATMOS, nt, Atm(n)%qdiag(isc:iec,jsc:jec,:,nt)  )
-       id_restart = register_restart_field(Tra_restart_r, fname, tracer_name, Atm(n)%qdiag(:,:,:,nt), &
-                    domain=fv_domain, mandatory=.false., tile_count=n)
+       ! id_restart = register_restart_field(Tra_restart_r, fname, tracer_name, Atm(n)%qdiag(:,:,:,nt), &
+                    ! domain=fv_domain, mandatory=.false., tile_count=n)
+    if (.not.present(fms2fileobj)) then
+       else
+          if (variable_exists(fms2fileobj,trim(tracer_name)) )then
+               call fms2_register_restart_field(fms2fileobj,tracer_name,Atm(n)%qdiag(:,:,:,nt))
+          endif
+       endif
     enddo
-    if (file_exist('INPUT'//trim(fname))) then
-      call restore_state(Tra_restart_r)
-      call free_restart_type(Tra_restart_r)
+    ! if (file_exist('INPUT'//trim(fname))) then
+      ! call restore_state(Tra_restart_r)
+      ! call free_restart_type(Tra_restart_r)
+    if (.not.present(fms2fileobj)) then
+     if (file_exist('INPUT/'//trim(fname))) then
+          call restore_state(Tra_restart_r)
+          call free_restart_type(Tra_restart_r)
+     else
+          call mpp_error(NOTE,'==> Warning from fv_io_read_tracers: Expected file '//trim(fname)//' does not exist')
+     endif
     else
-      call mpp_error(NOTE,'==> Warning from fv_io_read_tracers: Expected file '//trim(fname)//' does not exist')
+      ! call mpp_error(NOTE,'==> Warning from fv_io_read_tracers: Expected file '//trim(fname)//' does not exist')
+      call read_restart(fms2fileobj)
+      call close_file(fms2fileobj)
     endif
 
     return
@@ -449,6 +581,103 @@ contains
   end subroutine  fv_io_register_nudge_restart
   ! </SUBROUTINE> NAME="fv_io_register_nudge_restart"
 
+  subroutine fv_io_register_axis(fms2fileobj,num_x,num_y,num_z,z_size,x1pos,x2pos,y1pos,y2pos,is_write)
+     type(FmsNetcdfDomainFile_t), intent(inout)   :: fms2fileobj
+     integer,           intent(in)                :: num_x
+     integer,           intent(in)                :: num_y
+     integer,           intent(in)                :: num_z
+     integer,           intent(in)                :: z_size
+     integer, optional, intent(in)                :: x1pos
+     integer, optional, intent(in)                :: x2pos
+     integer, optional, intent(in)                :: y1pos
+     integer, optional, intent(in)                :: y2pos
+     logical, optional, intent(in)                :: is_write
+     integer, allocatable, dimension(:) :: posx, posy
+     real(kind=8), allocatable, dimension(:) :: axis_data
+     real(kind=8)                            :: timeval = 1.0d0
+     integer :: lx, ly, lz, npz
+     integer :: i, increment, istart, iend
+     character(len=1) :: cn
+     character(len=7) :: aname
+     logical :: write_call
+     if (present(is_write)) then
+          write_call = is_write
+     else
+          write_call = .false.
+     endif
+!> Initialize the axis positions
+     allocate(integer :: posx(num_x))
+     allocate(integer :: posy(num_y))
+     posx(:)=CENTER
+     posy(:)=CENTER
+     if (present(x1pos)) posx(1) = x1pos
+     if (present(y1pos)) posy(1) = y1pos
+
+     if (present(x2pos) .and. num_x > 1) posx(2) = x2pos
+     if (present(y2pos) .and. num_y > 1) posy(2) = y2pos
+!> Loop through the axes and register them
+     do lx = 1,num_x
+          write(cn,'(I1)') lx
+          aname = 'xaxis_'//cn
+          call register_axis(fms2fileobj, 'xaxis_'//cn, 'X', domain_position=posx(lx) )
+          call register_field(fms2fileobj, "xaxis_"//cn, "double", (/"xaxis_"//cn/))
+!          call register_variable_attribute(fms2fileobj,"xaxis_"//cn, "axis", "X")
+          if (write_call) then
+               call register_variable_attribute(fms2fileobj,aname, "axis", "X")
+               call get_global_io_domain_indices(fms2fileobj, aname, istart, iend)
+               allocate(real(kind=8) :: axis_data(((iend-istart)+1)) )
+               do i = 1,((iend-istart)+1)
+                    axis_data(i) = dble(istart)+(dble(i)-1.0d0)
+               enddo
+               call write_data(fms2fileobj, aname, axis_data)
+               deallocate (axis_data)
+          endif   
+     enddo
+     do ly = 1,num_y
+          write(cn,'(I1)') ly
+          aname = 'yaxis_'//cn
+          call register_axis(fms2fileobj, 'yaxis_'//cn, 'Y', domain_position=posy(ly) )
+          call register_field(fms2fileobj, "yaxis_"//cn, "double", (/"yaxis_"//cn/))
+          if (write_call) then
+               call register_variable_attribute(fms2fileobj,aname, "axis", "Y")
+               call get_global_io_domain_indices(fms2fileobj, aname, istart, iend)
+               allocate(real(kind=8) :: axis_data(((iend-istart)+1)) )
+               do i = 1,((iend-istart)+1)
+                    axis_data(i) = dble(istart)+(dble(i)-1.0d0)
+               enddo
+               call write_data(fms2fileobj, aname, axis_data)
+               deallocate (axis_data)
+          endif
+     enddo
+     if (num_z /= 0) then
+     do lz = 1,num_z
+          write(cn,'(I1)') lz
+          aname = 'zaxis_'//cn
+          call register_axis(fms2fileobj, 'zaxis_'//cn, z_size)
+          call register_field(fms2fileobj, "zaxis_"//cn, "double", (/"zaxis_"//cn/))
+          if (write_call) then
+               call register_variable_attribute(fms2fileobj,aname, "axis", "Z")
+!               call get_global_io_domain_indices(fms2fileobj, aname, istart, iend)
+               allocate(real(kind=8) :: axis_data(z_size) )
+               do i = 1,z_size
+                    axis_data(i) = dble(i)
+               enddo
+               call write_data(fms2fileobj, aname, axis_data)
+               deallocate (axis_data)
+          endif
+     enddo
+     endif
+     call register_axis(fms2fileobj, "Time", unlimited)
+     call register_field(fms2fileobj, "Time", "float", (/"Time"/))
+     if (write_call) call write_data(fms2fileobj, "Time", timeval, unlim_dim_level=1)
+
+!     call register_variable_attribute(fms2fileobj, "Time","units","time level")
+
+     deallocate(posx)
+     deallocate(posy)
+
+
+  end subroutine fv_io_register_axis
 
   !#####################################################################
   ! <SUBROUTINE NAME="fv_io_register_restart">
@@ -456,14 +685,25 @@ contains
   ! <DESCRIPTION>
   !   register restart field to be written out to restart file.
   ! </DESCRIPTION>
-  subroutine  fv_io_register_restart(fv_domain,Atm)
+  subroutine  fv_io_register_restart(fv_domain,Atm, reading, writing)
     type(domain2d),      intent(inout) :: fv_domain
     type(fv_atmos_type), intent(inout) :: Atm(:)
+    logical, optional  , intent(in)    :: reading,writing
 
-    character(len=64) :: fname, tracer_name
+    character(len=64) :: fname, tracer_name, fname_fms2
     character(len=6)  :: gn, stile_name
     integer           :: id_restart
     integer           :: n, nt, ntracers, ntprog, ntdiag, ntileMe, ntiles
+    logical           :: read_call, write_call
+
+
+    read_call = .false.
+    write_call = .false.
+    if (present(reading)) read_call = reading
+    if (present(writing)) write_call = writing
+    if (read_call .and. write_call) call mpp_error(fatal, "fv_io_register_restart :: "//&
+                                    "Can not do both a read and write.")
+
 
     ntileMe = size(Atm(:))
     ntprog = size(Atm(1)%q,4)
@@ -496,78 +736,118 @@ contains
 !!$   endif
 #endif
 
-    fname = 'fv_core.res.nc'
-    id_restart = register_restart_field(Atm(1)%Fv_restart, fname, 'ak', Atm(1)%ak(:), no_domain=.true.)
-    id_restart = register_restart_field(Atm(1)%Fv_restart, fname, 'bk', Atm(1)%bk(:), no_domain=.true.)
+    ! fname = 'fv_core.res.nc'
+    ! id_restart = register_restart_field(Atm(1)%Fv_restart, fname, 'ak', Atm(1)%ak(:), no_domain=.true.)
+    ! id_restart = register_restart_field(Atm(1)%Fv_restart, fname, 'bk', Atm(1)%bk(:), no_domain=.true.)
 
     do n = 1, ntileMe
        fname = 'fv_core.res'//trim(stile_name)//'.nc'
-       id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'u', Atm(n)%u, &
-                     domain=fv_domain, position=NORTH,tile_count=n)
-       id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'v', Atm(n)%v, &
-                     domain=fv_domain, position=EAST,tile_count=n)
+       ! id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'u', Atm(n)%u, &
+                     ! domain=fv_domain, position=NORTH,tile_count=n)
+       ! id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'v', Atm(n)%v, &
+                     ! domain=fv_domain, position=EAST,tile_count=n)
+!> Register the axes for fv_core.res.tile#.nc
+       call fv_io_register_axis(Atm(n)%Fv_tile_fms2_restart,2,2,1,Atm(n)%npz,x2pos=EAST,y1pos=NORTH, is_write=write_call)
+!> Register the variables
+       call fms2_register_restart_field(Atm(n)%Fv_tile_fms2_restart,'u',Atm(n)%u,(/'xaxis_1','yaxis_1','zaxis_1','Time   '/))
+       call fms2_register_restart_field(Atm(n)%Fv_tile_fms2_restart,'v',Atm(n)%v,(/'xaxis_2','yaxis_2','zaxis_1','Time   '/))
        if (.not.Atm(n)%flagstruct%hydrostatic) then
-          id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'W', Atm(n)%w, &
-                        domain=fv_domain, mandatory=.false., tile_count=n)
-          id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'DZ', Atm(n)%delz, &
-                        domain=fv_domain, mandatory=.false., tile_count=n)
+          ! id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'W', Atm(n)%w, &
+                        ! domain=fv_domain, mandatory=.false., tile_count=n)
+          ! id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'DZ', Atm(n)%delz, &
+                        ! domain=fv_domain, mandatory=.false., tile_count=n)
+          if (write_call .or. variable_exists(Atm(n)%Fv_tile_fms2_restart,'W')) &
+               call fms2_register_restart_field(Atm(n)%Fv_tile_fms2_restart,'W',Atm(n)%w,(/'xaxis_1','yaxis_2','zaxis_1','Time   '/))
+          if (write_call .or. variable_exists(Atm(n)%Fv_tile_fms2_restart,'DZ')) &
+               call fms2_register_restart_field(Atm(n)%Fv_tile_fms2_restart,'DZ',Atm(n)%delz,(/'xaxis_1','yaxis_2','zaxis_1','Time   '/))
           if ( Atm(n)%flagstruct%hybrid_z ) then
-             id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'ZE0', Atm(n)%ze0, &
-                           domain=fv_domain, mandatory=.false., tile_count=n)
+             ! id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'ZE0', Atm(n)%ze0, &
+                           ! domain=fv_domain, mandatory=.false., tile_count=n)
+          if (write_call .or. variable_exists(Atm(n)%Fv_tile_fms2_restart,'ZE0')) &
+               call fms2_register_restart_field(Atm(n)%Fv_tile_fms2_restart,'ZE0',Atm(n)%ze0,(/'xaxis_1','yaxis_2','zaxis_1','Time   '/))
           endif
        endif
-       id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'T', Atm(n)%pt, &
-                     domain=fv_domain, tile_count=n)
-       id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'delp', Atm(n)%delp, &
-                     domain=fv_domain, tile_count=n)
-       id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'phis', Atm(n)%phis, &
-                     domain=fv_domain, tile_count=n)
+       ! id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'T', Atm(n)%pt, &
+                     ! domain=fv_domain, tile_count=n)
+       ! id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'delp', Atm(n)%delp, &
+                     ! domain=fv_domain, tile_count=n)
+       ! id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'phis', Atm(n)%phis, &
+                     ! domain=fv_domain, tile_count=n)
+       call fms2_register_restart_field(Atm(n)%Fv_tile_fms2_restart,'T',Atm(n)%pt,(/'xaxis_1','yaxis_2','zaxis_1','Time   '/))
+       call fms2_register_restart_field(Atm(n)%Fv_tile_fms2_restart,'delp',Atm(n)%delp,(/'xaxis_1','yaxis_2','zaxis_1','Time   '/))
+       call fms2_register_restart_field(Atm(n)%Fv_tile_fms2_restart,'phis',Atm(n)%phis,(/'xaxis_1','yaxis_2','Time   '/))
+
 
        !--- include agrid winds in restarts for use in data assimilation
        if (Atm(n)%flagstruct%agrid_vel_rst) then
-         id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'ua', Atm(n)%ua, &
-                       domain=fv_domain, tile_count=n, mandatory=.false.)
-         id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'va', Atm(n)%va, &
-                       domain=fv_domain, tile_count=n, mandatory=.false.)
+         ! id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'ua', Atm(n)%ua, &
+                       ! domain=fv_domain, tile_count=n, mandatory=.false.)
+         ! id_restart =  register_restart_field(Atm(n)%Fv_tile_restart, fname, 'va', Atm(n)%va, &
+                       ! domain=fv_domain, tile_count=n, mandatory=.false.)
+          if (write_call .or. variable_exists(Atm(n)%Fv_tile_fms2_restart,'ua')) &
+               call fms2_register_restart_field(Atm(n)%Fv_tile_fms2_restart,'ua',Atm(n)%ua,(/'xaxis_1','yaxis_2','zaxis_1','Time   '/))
+          if (write_call .or. variable_exists(Atm(n)%Fv_tile_fms2_restart,'va')) &
+               call fms2_register_restart_field(Atm(n)%Fv_tile_fms2_restart,'va',Atm(n)%va,(/'xaxis_1','yaxis_2','zaxis_1','Time   '/))
        endif
 
-       fname = 'fv_srf_wnd.res'//trim(stile_name)//'.nc'
-       id_restart =  register_restart_field(Atm(n)%Rsf_restart, fname, 'u_srf', Atm(n)%u_srf, &
-                     domain=fv_domain, tile_count=n)
-       id_restart =  register_restart_field(Atm(n)%Rsf_restart, fname, 'v_srf', Atm(n)%v_srf, &
-                     domain=fv_domain, tile_count=n)
+       ! fname = 'fv_srf_wnd.res'//trim(stile_name)//'.nc'
+       ! id_restart =  register_restart_field(Atm(n)%Rsf_restart, fname, 'u_srf', Atm(n)%u_srf, &
+                     ! domain=fv_domain, tile_count=n)
+       ! id_restart =  register_restart_field(Atm(n)%Rsf_restart, fname, 'v_srf', Atm(n)%v_srf, &
+                     ! domain=fv_domain, tile_count=n)
+       if (write_call .or. Atm(n)%flagstruct%srf_init) then
+          fname = 'fv_srf_wnd.res'//trim(stile_name)//'.nc'
+          call fv_io_register_axis(Atm(n)%Rsf_fms2_restart,1,1,0,0, is_write=write_call)
+
+          call fms2_register_restart_field(Atm(n)%Rsf_fms2_restart,'u_srf',Atm(n)%u_srf,(/'xaxis_1','yaxis_1','Time   '/))
+          call fms2_register_restart_field(Atm(n)%Rsf_fms2_restart,'v_srf',Atm(n)%v_srf,(/'xaxis_1','yaxis_1','Time   '/))
 #ifdef SIM_PHYS
-       id_restart =  register_restart_field(Rsf_restart(n), fname, 'ts', Atm(n)%ts, &
-                     domain=fv_domain, tile_count=n)
+       ! id_restart =  register_restart_field(Rsf_restart(n), fname, 'ts', Atm(n)%ts, &
+                     ! domain=fv_domain, tile_count=n)
+          call fms2_register_restart_field(Atm(n)%Rsf_fms2_restart,'ts',Atm(n)%ts,(/'xaxis_1','yaxis_1','Time   '/))
 #endif
+       endif
 
        if ( Atm(n)%flagstruct%fv_land ) then
           !-------------------------------------------------------------------------------------------------
           ! Optional terrain deviation (sgh) and land fraction (oro)
           fname = 'mg_drag.res'//trim(stile_name)//'.nc'
-          id_restart =  register_restart_field(Atm(n)%Mg_restart, fname, 'ghprime', Atm(n)%sgh, &
-                        domain=fv_domain, tile_count=n)
+          ! id_restart =  register_restart_field(Atm(n)%Mg_restart, fname, 'ghprime', Atm(n)%sgh, &
+                        ! domain=fv_domain, tile_count=n)
+          call fv_io_register_axis(Atm(n)%MG_fms2_restart,1,1,1,Atm(n)%npz, is_write=write_call)
+          call fms2_register_restart_field(Atm(n)%Mg_fms2_restart,'ghprime',Atm(n)%sgh,&
+                                            (/'xaxis_1','yaxis_1','zaxis_1','Time   '/) )
 
           fname = 'fv_land.res'//trim(stile_name)//'.nc'
-          id_restart = register_restart_field(Atm(n)%Lnd_restart, fname, 'oro', Atm(n)%oro, &
-                        domain=fv_domain, tile_count=n)
+          ! id_restart = register_restart_field(Atm(n)%Lnd_restart, fname, 'oro', Atm(n)%oro, &
+                        ! domain=fv_domain, tile_count=n)
+          call fv_io_register_axis(Atm(n)%Lnd_fms2_restart,1,1,1,Atm(n)%npz, is_write=write_call)
+          call fms2_register_restart_field(Atm(n)%Lnd_fms2_restart,'oro',Atm(n)%oro,&
+                                            (/'xaxis_1','yaxis_1','zaxis_1','Time   '/) )
        endif
 
        fname = 'fv_tracer.res'//trim(stile_name)//'.nc'
+      if (write_call) then
+       call fv_io_register_axis(Atm(n)%Tra_fms2_restart,1,1,1,Atm(n)%npz, is_write=write_call)
        do nt = 1, ntprog
           call get_tracer_names(MODEL_ATMOS, nt, tracer_name)
           ! set all tracers to an initial profile value
           call set_tracer_profile (MODEL_ATMOS, nt, Atm(n)%q(:,:,:,nt)  )
-          id_restart = register_restart_field(Atm(n)%Tra_restart, fname, tracer_name, Atm(n)%q(:,:,:,nt), &
-                       domain=fv_domain, mandatory=.false., tile_count=n)
+          ! id_restart = register_restart_field(Atm(n)%Tra_restart, fname, tracer_name, Atm(n)%q(:,:,:,nt), &
+                       ! domain=fv_domain, mandatory=.false., tile_count=n)
+          call fms2_register_restart_field(Atm(n)%Tra_fms2_restart,tracer_name, Atm(n)%q(:,:,:,nt),&
+                                            (/'xaxis_1','yaxis_1','zaxis_1','Time   '/) )
        enddo
        do nt = ntprog+1, ntracers
           call get_tracer_names(MODEL_ATMOS, nt, tracer_name)
           ! set all tracers to an initial profile value
           call set_tracer_profile (MODEL_ATMOS, nt, Atm(n)%qdiag(:,:,:,nt)  )
-          id_restart = register_restart_field(Atm(n)%Tra_restart, fname, tracer_name, Atm(n)%qdiag(:,:,:,nt), &
-                       domain=fv_domain, mandatory=.false., tile_count=n)
+          ! id_restart = register_restart_field(Atm(n)%Tra_restart, fname, tracer_name, Atm(n)%qdiag(:,:,:,nt), &
+                       ! domain=fv_domain, mandatory=.false., tile_count=n)
+          call fms2_register_restart_field(Atm(n)%Tra_fms2_restart,tracer_name, Atm(n)%qdiag(:,:,:,nt),&
+                                            (/'xaxis_1','yaxis_1','zaxis_1','Time   '/) )
        enddo
+      endif
 
        if ( Atm(n)%neststruct%nested ) then
           call fv_io_register_restart_BCs(Atm(n)) !TODO put into fv_io_register_restart
