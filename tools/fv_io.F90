@@ -285,7 +285,7 @@ contains
     integer, dimension(numx) :: xpos
     integer, dimension(numy) :: ypos
     integer, dimension(numz) :: zsize
-    integer :: ntprog, nt, ntracers
+    integer :: ntprog, ntdiag,  nt, ntracers
     character(len=64) :: tracer_name
     character(len=8), dimension(4)             :: dim_names
 
@@ -294,7 +294,10 @@ contains
     ypos = (/CENTER/)
     zsize = (/size(Atm%q,3)/)
 
-    call get_number_tracers(MODEL_ATMOS, num_tracers=ntracers, num_prog=ntprog)
+    ntprog = size(Atm%q,4)
+    ntdiag = size(Atm%qdiag,4)
+    ntracers = ntprog+ntdiag
+
     call register_fv_axis(Tra_restart, numx=numx, numy=numy, xpos=xpos, ypos=ypos, numz=numz, zsize=zsize)
     do nt = 1, ntprog
       call get_tracer_names(MODEL_ATMOS, nt, tracer_name)
@@ -310,7 +313,6 @@ contains
       call register_restart_field(Tra_restart, tracer_name, Atm%qdiag(:,:,:,nt), &
                    dim_names, is_optional=.true.)
    enddo
-    ntprog = size(Atm%q,4)
 
   end subroutine register_fv_tracer_res
 
@@ -678,7 +680,7 @@ contains
     type(fv_atmos_type),        intent(inout) :: Atm(:)
     logical, intent(IN) :: grids_on_this_pe(:)
     character(len=*), optional, intent(in) :: timestamp
-    integer                                :: n, ntileMe
+    integer                                :: n, ntileMe,ntiles
     logical :: tile_file_exists
     type(FmsNetcdfFile_t)       ::  Fv_restart
     type(FmsNetcdfDomainFile_t) ::  Fv_restart_tile, Tra_restart, Rsf_restart, Mg_restart, Lnd_restart
@@ -691,6 +693,7 @@ contains
        !call save_restart(Atm(1)%SST_restart, timestamp)
     endif
 
+    ntiles = mpp_get_ntile_count(fv_domain)
     do n = 1, ntileMe
        if (.not. grids_on_this_pe(n)) cycle
 
@@ -700,7 +703,7 @@ contains
           call close_file(Fv_restart)
        endif
 
-       if (ntileMe > 1) then
+       if (ntiles > 1) then
           tile_file_exists = open_file(Fv_restart_tile,"RESTART/fv_core.res.nc","overwrite", fv_domain, is_restart=.true.)
        else
           tile_file_exists = open_file(Fv_restart_tile,"RESTART/fv_core.res.nc","append", fv_domain, is_restart=.true.)
