@@ -301,15 +301,19 @@ contains
     call register_fv_axis(Tra_restart, numx=numx, numy=numy, xpos=xpos, ypos=ypos, numz=numz, zsize=zsize)
     do nt = 1, ntprog
       call get_tracer_names(MODEL_ATMOS, nt, tracer_name)
+      if(Tra_restart%is_readonly) then !if reading file (don't do this if writing)
       ! set all tracers to an initial profile value
-      call set_tracer_profile (MODEL_ATMOS, nt, Atm%q(:,:,:,nt)  )
+         call set_tracer_profile (MODEL_ATMOS, nt, Atm%q(:,:,:,nt)  )
+     endif
       call register_restart_field(Tra_restart, tracer_name, Atm%q(:,:,:,nt), &
                    dim_names, is_optional=.true.)
    enddo
    do nt = ntprog+1, ntracers
       call get_tracer_names(MODEL_ATMOS, nt, tracer_name)
+      if(Tra_restart%is_readonly) then !if reading file (don't do this if writing)
       ! set all tracers to an initial profile value
-      call set_tracer_profile (MODEL_ATMOS, nt, Atm%qdiag(:,:,:,nt)  )
+         call set_tracer_profile (MODEL_ATMOS, nt, Atm%qdiag(:,:,:,nt)  )
+      endif
       call register_restart_field(Tra_restart, tracer_name, Atm%qdiag(:,:,:,nt), &
                    dim_names, is_optional=.true.)
    enddo
@@ -397,6 +401,7 @@ contains
     fname = 'INPUT/fv_srf_wnd.res'//trim(stile_name)//'.nc'
     if (open_file(Rsf_restart,fname,"read", fv_domain, is_restart=.true.)) then
       call register_fv_srf_wnd_res(Rsf_restart, Atm(1))
+      Atm(1)%flagstruct%srf_init = .true.
       call read_restart(Rsf_restart)
       call close_file(Rsf_restart)
     else
