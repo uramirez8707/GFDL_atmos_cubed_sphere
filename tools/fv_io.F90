@@ -353,8 +353,7 @@ contains
     type(domain2d),      intent(inout) :: fv_domain
     type(fv_atmos_type), intent(inout) :: Atm(:)
 
-    character(len=64)    :: fname, tracer_name
-    character(len=6)  :: stile_name
+    character(len=64)    :: tracer_name
     integer              :: isc, iec, jsc, jec, n, nt, nk, ntracers
     integer              :: ntileMe
     integer              :: ks, ntiles
@@ -363,8 +362,18 @@ contains
     character(len=128)           :: tracer_longname, tracer_units
     type(FmsNetcdfFile_t)       ::  Fv_restart
     type(FmsNetcdfDomainFile_t) ::  Fv_restart_tile, Tra_restart, Rsf_restart, Mg_restart, Lnd_restart
+    character(len=120) :: fname
+    character(len=20) :: suffix
+    character(len=1) :: tile_num
 
-    if (open_file(Fv_restart,"INPUT/fv_core.res.nc","read", is_restart=.true.)) then
+    suffix = ''
+    ! If this is a nesting case, it will need to append "nestXX" to the filename
+    if (Atm(1)%neststruct%nested) then
+       suffix = '.'//trim(Atm(1)%nml_filename)//''
+    endif
+
+    fname = 'INPUT/fv_core.res'//trim(suffix)//'.nc'
+    if (open_file(Fv_restart,fname,"read", is_restart=.true.)) then
       call register_fv_core_res(Fv_restart, Atm(1))
       call read_restart(Fv_restart)
       call close_file(Fv_restart)
@@ -379,22 +388,26 @@ contains
        !call restore_state(Atm(1)%SST_restart)
     endif
 
-! fix for single tile runs where you need fv_core.res.nc and fv_core.res.tile1.nc
     ntiles = mpp_get_ntile_count(fv_domain)
-    if(ntiles == 1 .and. .not. Atm(1)%neststruct%nested) then
-       stile_name = '.tile1'
-    else
-       stile_name = ''
+    !If the number of tiles is equal to 1, and it is not a nested case add the ".tile1" suffix to the filename
+    if (ntiles == 1 .and. .not. Atm(1)%neststruct%nested) then
+       suffix = ''//trim(suffix)//'.tile1'
+    !If this is a nested case add the ".tileXX" suffix to the filename
+    elseif (Atm(1)%neststruct%nested) then
+       tile_num = ''
+       write(tile_num,'(I1)') Atm(1)%neststruct%nestupdate
+       suffix = ''//trim(suffix)//'.tile' //trim(tile_num)//''
     endif
 
-    if (open_file(Fv_restart_tile,"INPUT/fv_core.res.nc","read", fv_domain, is_restart=.true.)) then
+    fname = 'INPUT/fv_core.res'//trim(suffix)//'.nc'
+    if (open_file(Fv_restart_tile,fname,"read", fv_domain, is_restart=.true.)) then
       call register_fv_core_res_tile(Fv_restart_tile, Atm(1))
       call read_restart(Fv_restart_tile)
       call close_file(Fv_restart_tile)
     endif
 
 !--- restore data for fv_tracer - if it exists
-    fname = 'INPUT/fv_tracer.res'//trim(stile_name)//'.nc'
+    fname = 'INPUT/fv_tracer.res'//trim(suffix)//'.nc'
     if (open_file(Tra_restart,fname,"read", fv_domain, is_restart=.true.)) then
       call register_fv_tracer_res(Tra_restart, Atm(1))
       call read_restart(Tra_restart)
@@ -404,7 +417,7 @@ contains
     endif
 
 !--- restore data for surface winds - if it exists
-    fname = 'INPUT/fv_srf_wnd.res'//trim(stile_name)//'.nc'
+    fname = 'INPUT/fv_srf_wnd.res'//trim(suffix)//'.nc'
     if (open_file(Rsf_restart,fname,"read", fv_domain, is_restart=.true.)) then
       call register_fv_srf_wnd_res(Rsf_restart, Atm(1))
       Atm(1)%flagstruct%srf_init = .true.
@@ -417,7 +430,7 @@ contains
 
     if ( Atm(1)%flagstruct%fv_land ) then
 !--- restore data for mg_drag - if it exists
-         fname = 'INPUT/mg_drag.res'//trim(stile_name)//'.nc'
+         fname = 'INPUT/mg_drag.res'//trim(suffix)//'.nc'
          if (open_file(Mg_restart,fname,"read", fv_domain, is_restart=.true.)) then
            call register_mg_restart(Mg_restart, Atm(1))
            call read_restart(Mg_restart)
@@ -426,7 +439,7 @@ contains
            call mpp_error(NOTE,'==> Warning from fv_read_restart: Expected file '//trim(fname)//' does not exist')
          endif
 !--- restore data for fv_land - if it exists
-         fname = 'INPUT/fv_land.res'//trim(stile_name)//'.nc'
+         fname = 'INPUT/fv_land.res'//trim(suffix)//'.nc'
          if (open_file(Lnd_restart,fname,"read", fv_domain, is_restart=.true.)) then
            call register_lnd_restart(Lnd_restart, Atm(1))
            call read_restart(Lnd_restart)
@@ -703,7 +716,6 @@ contains
   ! </SUBROUTINE> NAME="fv_io_register_nudge_restart"
 
 
-  
   !#####################################################################
   ! <SUBROUTINE NAME="fv_io_write_restart">
   !
@@ -719,7 +731,9 @@ contains
     type(FmsNetcdfFile_t)       ::  Fv_restart
     type(FmsNetcdfDomainFile_t) ::  Fv_restart_tile, Tra_restart, Rsf_restart, Mg_restart, Lnd_restart
     type(domain2d)     :: fv_domain
-
+    character(len=120) :: fname
+    character(len=20) :: suffix
+    character(len=1) :: tile_num
     fv_domain = Atm%domain
 
 !!$    if ( use_ncep_sst .or. Atm%flagstruct%nudge .or. Atm%flagstruct%ncep_ic ) then
@@ -731,47 +745,61 @@ contains
        !call save_restart(Atm%SST_restart, timestamp)
     endif
 
-    ntiles = mpp_get_ntile_count(fv_domain)
+    suffix = ''
+    ! If this is a nesting case, it will need to append "nestXX" to the filename
+    if (Atm%neststruct%nested) then
+       suffix = '.'//trim(Atm%nml_filename)//''
+    endif
 
-    if (open_file(Fv_restart,"RESTART/fv_core.res.nc","overwrite", is_restart=.true.)) then
+    fname = 'RESTART/fv_core.res'//trim(suffix)//'.nc'
+    if (open_file(Fv_restart,fname,"overwrite", is_restart=.true.)) then
        call register_fv_core_res(Fv_restart, Atm)
        call write_restart(Fv_restart)
        call close_file(Fv_restart)
     endif
 
-    if (ntiles > 1) then
-       tile_file_exists = open_file(Fv_restart_tile,"RESTART/fv_core.res.nc","overwrite", fv_domain, is_restart=.true.)
-    else
-       tile_file_exists = open_file(Fv_restart_tile,"RESTART/fv_core.res.nc","append", fv_domain, is_restart=.true.)
+    ntiles = mpp_get_ntile_count(fv_domain)
+    !If the number of tiles is equal to 1, and it is not a nested case add the ".tile1" suffix to the filename
+    if (ntiles == 1 .and. .not. Atm%neststruct%nested) then
+       suffix = ''//trim(suffix)//'.tile1'
+    !If this is a nested case add the ".tileXX" suffix to the filename
+    elseif (Atm%neststruct%nested) then
+       write(tile_num,'(I1)') Atm%neststruct%nestupdate
+       suffix = ''//trim(suffix)//'.tile' //trim(tile_num)//''
     endif
 
-    if (tile_file_exists) then
+    fname = 'RESTART/fv_core.res'//trim(suffix)//'.nc'
+    if (open_file(Fv_restart_tile,fname,"overwrite", fv_domain, is_restart=.true.)) then
        call register_fv_core_res_tile(Fv_restart_tile, Atm)
        call write_restart (Fv_restart_tile)
        call close_file (Fv_restart_tile)
     endif
 
-    if (open_file(Rsf_restart,"RESTART/fv_srf_wnd.res.nc","overwrite", fv_domain, is_restart=.true.)) then
+    fname = 'RESTART/fv_srf_wnd.res'//trim(suffix)//'.nc'
+    if (open_file(Rsf_restart,fname,"overwrite", fv_domain, is_restart=.true.)) then
        call register_fv_srf_wnd_res(Rsf_restart, Atm)
        call write_restart (Rsf_restart)
        call close_file (Rsf_restart)
     endif
 
     if ( Atm%flagstruct%fv_land ) then
-       if (open_file(Mg_restart,"RESTART/mg_drag.res.nc","overwrite", fv_domain, is_restart=.true.)) then
+       fname = 'RESTART/mg_drag.res'//trim(suffix)//'.nc'
+       if (open_file(Mg_restart,fname,"overwrite", fv_domain, is_restart=.true.)) then
           call register_mg_restart(Mg_restart, Atm)
           call write_restart(Mg_restart)
           call close_file(Mg_restart)
        endif
 
-       if (open_file(Lnd_restart,"RESTART/fv_land.res.nc","overwrite",fv_domain, is_restart=.true.)) then
+      fname = 'RESTART/fv_land.res'//trim(suffix)//'.nc'
+       if (open_file(Lnd_restart,fname,"overwrite",fv_domain, is_restart=.true.)) then
           call register_lnd_restart(Lnd_restart, Atm)
           call write_restart(Lnd_restart)
           call close_file(Lnd_restart)
        endif
     endif
 
-    if (open_file(Tra_restart,"RESTART/fv_tracer.res.nc","overwrite",fv_domain, is_restart=.true.)) then
+    fname = 'RESTART/fv_tracer.res'//trim(suffix)//'.nc'
+    if (open_file(Tra_restart,fname,"overwrite",fv_domain, is_restart=.true.)) then
        call register_fv_tracer_res(Tra_restart, Atm)
        call write_restart(Tra_restart)
        call close_file(Tra_restart)
