@@ -824,9 +824,7 @@ module fv_arrays_mod
 !!!!!!!!!!!!!!
 ! From fv_io !
 !!!!!!!!!!!!!!
-     type(restart_file_type) :: Fv_restart, SST_restart, Fv_tile_restart, &
-          Rsf_restart, Mg_restart, Lnd_restart, Tra_restart
-
+ type(restart_file_type) :: SST_restart
      type(fv_nest_type) :: neststruct
 
      !Hold on to coarse-grid global grid, so we don't have to waste processor time getting it again when starting to do grid nesting

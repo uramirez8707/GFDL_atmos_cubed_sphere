@@ -32,7 +32,7 @@ module fv_restart_mod
   use constants_mod,       only: kappa, pi=>pi_8, omega, rdgas, grav, rvgas, cp_air, radius
   use fv_arrays_mod,       only: fv_atmos_type, fv_nest_type, fv_grid_bounds_type, R_GRID
   use fv_io_mod,           only: fv_io_init, fv_io_read_restart, fv_io_write_restart, &
-                                 remap_restart, fv_io_register_restart, fv_io_register_nudge_restart, &
+                                 remap_restart, fv_io_register_nudge_restart, &
                                  fv_io_register_restart_BCs, fv_io_write_BCs, fv_io_read_BCs
   use fv_grid_utils_mod,   only: ptop_min, fill_ghost, g_sum, &
                                  make_eta_level, cubed_to_latlon, great_circle_dist
@@ -178,7 +178,6 @@ contains
 
        !2. Register restarts
        !--- call fv_io_register_restart to register restart field to be written out in fv_io_write_restart
-       if ( n==this_grid ) call fv_io_register_restart(Atm(n)%domain,Atm(n:n))
        !if (Atm(n)%neststruct%nested) call fv_io_register_restart_BCs(Atm(n)) !TODO put into fv_io_register_restart
 
 
