@@ -22,6 +22,7 @@ module fv_arrays_mod
 #include <fms_platform.h>
   use mpp_domains_mod,       only: domain2d
   use fms_io_mod,            only: restart_file_type
+  use fms2_io_mod,           only: FmsNetcdfFile_t, FmsNetcdfDomainFile_t
   use time_manager_mod,      only: time_type
   use horiz_interp_type_mod, only: horiz_interp_type
   use mpp_mod,               only: mpp_broadcast
@@ -823,6 +824,16 @@ module fv_arrays_mod
 !!!!!!!!!!!!!!
 ! From fv_io !
 !!!!!!!!!!!!!!
+     type(FmsNetcdfFile_t) :: Fv_restart
+     type(FmsNetcdfDomainFile_t) :: SST_restart, Fv_restart_tile, &
+          Rsf_restart, Mg_restart, Lnd_restart, Tra_restart
+     logical :: Fv_restart_is_open=.false.
+     logical :: SST_restart_is_open=.false.
+     logical :: Fv_restart_tile_is_open=.false.
+     logical :: Rsf_restart_is_open=.false.
+     logical :: Mg_restart_is_open=.false.
+     logical :: Lnd_restart_is_open=.false.
+     logical :: Tra_restart_is_open=.false.
      type(fv_nest_type) :: neststruct
 
      !Hold on to coarse-grid global grid, so we don't have to waste processor time getting it again when starting to do grid nesting
