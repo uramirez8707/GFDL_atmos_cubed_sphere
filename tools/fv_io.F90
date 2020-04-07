@@ -228,90 +228,100 @@ contains
        gn = ''
     end if
     call set_filename_appendix(gn)
-    call fv_io_register_restart_BCs(Atm) !TODO put into fv_io_register_restart
+    if (.not. Atm%fmsio_is_registered .and. Atm%neststruct%nested) then
+       call fv_io_register_restart_BCs(Atm)
+       Atm%fmsio_is_registered = .true.
+    endif
 
     ! fname = 'fv_core.res.nc'
-    call register_axis(Atm%Fv_restart, "xaxis_1", size(Atm%ak(:), 1))
-    call register_axis(Atm%Fv_restart, "Time", unlimited)
-    if (.not. Atm%Fv_restart%is_readonly) then !if writing file
-       call register_field(Atm%Fv_restart, "xaxis_1", "double", (/"xaxis_1"/))
-       call register_variable_attribute(Atm%Fv_restart,"xaxis_1", "axis", "X")
-       if (allocated(buffer)) deallocate(buffer)
-       allocate(buffer(size(Atm%ak(:), 1)))
-       do j = 1, size(Atm%ak(:), 1)
-          buffer(j) = j
-       end do
-       call write_data(Atm%Fv_restart, "xaxis_1", buffer)
-       deallocate(buffer)
-       call register_field(Atm%Fv_restart, "Time", "double", (/"Time"/))
-       call register_variable_attribute(Atm%Fv_restart, dim_names_2d(2), "cartesian_axis", "T")
-       call register_variable_attribute(Atm%Fv_restart, dim_names_2d(2), "units", "time level")
-       call register_variable_attribute(Atm%Fv_restart, dim_names_2d(2), "long_name", dim_names_2d(2))
-       call write_data(Atm%Fv_restart, "Time", 1)
-    endif
-    call register_restart_field (Atm%Fv_restart, 'ak', Atm%ak(:), dim_names_2d)
-    call register_restart_field (Atm%Fv_restart, 'bk', Atm%bk(:), dim_names_2d)
+    if (Atm%Fv_restart_is_open) then
+       call register_axis(Atm%Fv_restart, "xaxis_1", size(Atm%ak(:), 1))
+       call register_axis(Atm%Fv_restart, "Time", unlimited)
+       if (.not. Atm%Fv_restart%is_readonly) then !if writing file
+          call register_field(Atm%Fv_restart, "xaxis_1", "double", (/"xaxis_1"/))
+          call register_variable_attribute(Atm%Fv_restart,"xaxis_1", "axis", "X")
+          if (allocated(buffer)) deallocate(buffer)
+          allocate(buffer(size(Atm%ak(:), 1)))
+          do j = 1, size(Atm%ak(:), 1)
+             buffer(j) = j
+          end do
+          call write_data(Atm%Fv_restart, "xaxis_1", buffer)
+          deallocate(buffer)
+          call register_field(Atm%Fv_restart, "Time", "double", (/"Time"/))
+          call register_variable_attribute(Atm%Fv_restart, dim_names_2d(2), "cartesian_axis", "T")
+          call register_variable_attribute(Atm%Fv_restart, dim_names_2d(2), "units", "time level")
+          call register_variable_attribute(Atm%Fv_restart, dim_names_2d(2), "long_name", dim_names_2d(2))
+          call write_data(Atm%Fv_restart, "Time", 1)
+       endif
+       call register_restart_field (Atm%Fv_restart, 'ak', Atm%ak(:), dim_names_2d)
+       call register_restart_field (Atm%Fv_restart, 'bk', Atm%bk(:), dim_names_2d)
 
     ! fname= 'fv_core.res'//trim(stile_name)//'.nc'
-    zsize = (/size(Atm%u,3)/)
-    call register_fv_axis(Atm%Fv_restart_tile, numx=numx_2d, numy=numy_2d, xpos=xpos_2d, ypos=ypos_2d, numz=numz, zsize=zsize)
-    call register_restart_field(Atm%Fv_restart_tile, 'u', Atm%u, dim_names_4d)
-    call register_restart_field(Atm%Fv_restart_tile, 'v', Atm%v, dim_names_4d2)
+    elseif (Atm%Fv_restart_tile_is_open) then
+       zsize = (/size(Atm%u,3)/)
+       call register_fv_axis(Atm%Fv_restart_tile, numx=numx_2d, numy=numy_2d, xpos=xpos_2d, ypos=ypos_2d, numz=numz, zsize=zsize)
+       call register_restart_field(Atm%Fv_restart_tile, 'u', Atm%u, dim_names_4d)
+       call register_restart_field(Atm%Fv_restart_tile, 'v', Atm%v, dim_names_4d2)
 
-    if (.not.Atm%flagstruct%hydrostatic) then
-       call register_restart_field(Atm%Fv_restart_tile,  'W', Atm%w, dim_names_4d3)
-       call register_restart_field(Atm%Fv_restart_tile,  'DZ', Atm%delz, dim_names_4d3)
-       if ( Atm%flagstruct%hybrid_z ) then
-          call register_restart_field(Atm%Fv_restart_tile,  'ZE0', Atm%ze0)
+       if (.not.Atm%flagstruct%hydrostatic) then
+          call register_restart_field(Atm%Fv_restart_tile,  'W', Atm%w, dim_names_4d3)
+          call register_restart_field(Atm%Fv_restart_tile,  'DZ', Atm%delz, dim_names_4d3)
+          if ( Atm%flagstruct%hybrid_z ) then
+             call register_restart_field(Atm%Fv_restart_tile,  'ZE0', Atm%ze0)
+          endif
        endif
-    endif
-    call register_restart_field(Atm%Fv_restart_tile,  'T', Atm%pt, dim_names_4d3)
-    call register_restart_field(Atm%Fv_restart_tile,  'delp', Atm%delp, dim_names_4d3)
-    call register_restart_field(Atm%Fv_restart_tile,  'phis', Atm%phis, dim_names_3d)
+       call register_restart_field(Atm%Fv_restart_tile,  'T', Atm%pt, dim_names_4d3)
+       call register_restart_field(Atm%Fv_restart_tile,  'delp', Atm%delp, dim_names_4d3)
+       call register_restart_field(Atm%Fv_restart_tile,  'phis', Atm%phis, dim_names_3d)
 
-    !--- include agrid winds in restarts for use in data assimilation
-    if (Atm%flagstruct%agrid_vel_rst) then
-       call register_restart_field(Atm%Fv_restart_tile,  'ua', Atm%ua)
-       call register_restart_field(Atm%Fv_restart_tile,  'va', Atm%va)
-    endif
+       !--- include agrid winds in restarts for use in data assimilation
+        if (Atm%flagstruct%agrid_vel_rst) then
+          call register_restart_field(Atm%Fv_restart_tile,  'ua', Atm%ua)
+          call register_restart_field(Atm%Fv_restart_tile,  'va', Atm%va)
+       endif
 
     ! fname = 'fv_srf_wnd.res'//trim(stile_name)//'.nc
-    call register_fv_axis(Atm%Rsf_restart, numx=numx, numy=numy, xpos=xpos, ypos=ypos)
-    call register_restart_field(Atm%Rsf_restart, 'u_srf', Atm%u_srf, dim_names_3d2)
-    call register_restart_field(Atm%Rsf_restart, 'v_srf', Atm%v_srf, dim_names_3d2)
+    elseif (Atm%Rsf_restart_is_open) then
+       call register_fv_axis(Atm%Rsf_restart, numx=numx, numy=numy, xpos=xpos, ypos=ypos)
+       call register_restart_field(Atm%Rsf_restart, 'u_srf', Atm%u_srf, dim_names_3d2)
+       call register_restart_field(Atm%Rsf_restart, 'v_srf', Atm%v_srf, dim_names_3d2)
 #ifdef SIM_PHYS
-    call register_restart_field(Atm%Rsf_restart, 'ts', Atm%ts, dim_names_3d2)
+       call register_restart_field(Atm%Rsf_restart, 'ts', Atm%ts, dim_names_3d2)
 #endif
 
     ! fname = 'mg_drag.res'//trim(stile_name)//'.nc'
-    call register_fv_axis(Atm%Mg_restart, numx=numx, xpos=xpos)
-    call register_restart_field (Atm%Mg_restart, 'ghprime', Atm%sgh)
+    elseif (Atm%Mg_restart_is_open) then
+       call register_fv_axis(Atm%Mg_restart, numx=numx, xpos=xpos)
+       call register_restart_field (Atm%Mg_restart, 'ghprime', Atm%sgh)
 
     ! fname = 'fv_land.res'//trim(stile_name)//'.nc'
-    call register_fv_axis(Atm%Lnd_restart, numx=numx, xpos=xpos)
-    call register_restart_field (Atm%Lnd_restart, 'oro', Atm%oro)
+    elseif (Atm%Lnd_restart_is_open) then
+       call register_fv_axis(Atm%Lnd_restart, numx=numx, xpos=xpos)
+       call register_restart_field (Atm%Lnd_restart, 'oro', Atm%oro)
 
     ! fname = 'fv_tracer.res'//trim(stile_name)//'.nc'
-    zsize = (/size(Atm%q,3)/)
-    call register_fv_axis(Atm%Tra_restart, numx=numx, numy=numy, xpos=xpos, ypos=ypos, numz=numz, zsize=zsize)
-    do nt = 1, ntprog
-       call get_tracer_names(MODEL_ATMOS, nt, tracer_name)
-       if(Atm%Tra_restart%is_readonly) then !if reading file (don't do this if writing)
-       ! set all tracers to an initial profile value
-          call set_tracer_profile (MODEL_ATMOS, nt, Atm%q(:,:,:,nt)  )
-       endif
-       call register_restart_field(Atm%Tra_restart, tracer_name, Atm%q(:,:,:,nt), &
-                    dim_names_4d, is_optional=.true.)
-    enddo
-    do nt = ntprog+1, ntracers
-       call get_tracer_names(MODEL_ATMOS, nt, tracer_name)
-       if(Atm%Tra_restart%is_readonly) then !if reading file (don't do this if writing)
-       ! set all tracers to an initial profile value
-          call set_tracer_profile (MODEL_ATMOS, nt, Atm%qdiag(:,:,:,nt)  )
-       endif
-       call register_restart_field(Atm%Tra_restart, tracer_name, Atm%qdiag(:,:,:,nt), &
-                    dim_names_4d, is_optional=.true.)
-    enddo
+    elseif (Atm%Tra_restart_is_open) then
+       zsize = (/size(Atm%q,3)/)
+       call register_fv_axis(Atm%Tra_restart, numx=numx, numy=numy, xpos=xpos, ypos=ypos, numz=numz, zsize=zsize)
+       do nt = 1, ntprog
+          call get_tracer_names(MODEL_ATMOS, nt, tracer_name)
+          if(Atm%Tra_restart%is_readonly) then !if reading file (don't do this if writing)
+          ! set all tracers to an initial profile value
+             call set_tracer_profile (MODEL_ATMOS, nt, Atm%q(:,:,:,nt)  )
+          endif
+          call register_restart_field(Atm%Tra_restart, tracer_name, Atm%q(:,:,:,nt), &
+                       dim_names_4d, is_optional=.true.)
+       enddo
+       do nt = ntprog+1, ntracers
+          call get_tracer_names(MODEL_ATMOS, nt, tracer_name)
+          if(Atm%Tra_restart%is_readonly) then !if reading file (don't do this if writing)
+          ! set all tracers to an initial profile value
+             call set_tracer_profile (MODEL_ATMOS, nt, Atm%qdiag(:,:,:,nt)  )
+          endif
+          call register_restart_field(Atm%Tra_restart, tracer_name, Atm%qdiag(:,:,:,nt), &
+                       dim_names_4d, is_optional=.true.)
+       enddo
+    endif
   end subroutine  fv_io_register_restart
   ! </SUBROUTINE> NAME="fv_io_register_restart"
 
@@ -337,9 +347,6 @@ contains
     character(len=20) :: suffix
     character(len=1) :: tile_num
 
-    ! Register restarts before read
-    call fv_io_register_restart(Atm(1))
-
     suffix = ''
     ! If this is a nesting case, it will need to append "nestXX" to the filename
     if (Atm(1)%neststruct%nested) then
@@ -349,8 +356,10 @@ contains
     fname = 'INPUT/fv_core.res'//trim(suffix)//'.nc'
     Atm(1)%Fv_restart_is_open = open_file(Atm(1)%Fv_restart,fname,"read", is_restart=.true.)
     if (Atm(1)%Fv_restart_is_open) then
+      call fv_io_register_restart(Atm(1))
       call read_restart(Atm(1)%Fv_restart)
       call close_file(Atm(1)%Fv_restart)
+      Atm(1)%Fv_restart_is_open = .false.
     endif
 
     if (Atm(1)%flagstruct%external_eta) then
@@ -376,16 +385,20 @@ contains
     fname = 'INPUT/fv_core.res'//trim(suffix)//'.nc'
     Atm(1)%Fv_restart_tile_is_open = open_file(Atm(1)%Fv_restart_tile, fname, "read", fv_domain, is_restart=.true.)
     if (Atm(1)%Fv_restart_tile_is_open) then
+      call fv_io_register_restart(Atm(1))
       call read_restart(Atm(1)%Fv_restart_tile)
       call close_file(Atm(1)%Fv_restart_tile)
+      Atm(1)%Fv_restart_tile_is_open = .false.
     endif
 
 !--- restore data for fv_tracer - if it exists
     fname = 'INPUT/fv_tracer.res'//trim(suffix)//'.nc'
     Atm(1)%Tra_restart_is_open = open_file(Atm(1)%Tra_restart, fname, "read", fv_domain, is_restart=.true.)
     if (Atm(1)%Tra_restart_is_open) then
+      call fv_io_register_restart(Atm(1))
       call read_restart(Atm(1)%Tra_restart)
       call close_file(Atm(1)%Tra_restart)
+      Atm(1)%Tra_restart_is_open = .false.
     else
       call mpp_error(NOTE,'==> Warning from fv_read_restart: Expected file '//trim(fname)//' does not exist')
     endif
@@ -395,8 +408,10 @@ contains
     Atm(1)%Rsf_restart_is_open = open_file(Atm(1)%Rsf_restart, fname, "read", fv_domain, is_restart=.true.)
     if (Atm(1)%Rsf_restart_is_open) then
       Atm(1)%flagstruct%srf_init = .true.
+      call fv_io_register_restart(Atm(1))
       call read_restart(Atm(1)%Rsf_restart)
       call close_file(Atm(1)%Rsf_restart)
+      Atm(1)%Rsf_restart_is_open = .false.
     else
       call mpp_error(NOTE,'==> Warning from fv_read_restart: Expected file '//trim(fname)//' does not exist')
       Atm(1)%flagstruct%srf_init = .false.
@@ -407,8 +422,10 @@ contains
          fname = 'INPUT/mg_drag.res'//trim(suffix)//'.nc'
          Atm(1)%Mg_restart_is_open = open_file(Atm(1)%Mg_restart, fname, "read", fv_domain, is_restart=.true.)
          if (Atm(1)%Mg_restart_is_open) then
+           call fv_io_register_restart(Atm(1))
            call read_restart(Atm(1)%Mg_restart)
            call close_file(Atm(1)%Mg_restart)
+           Atm(1)%Mg_restart_is_open = .false.
          else
            call mpp_error(NOTE,'==> Warning from fv_read_restart: Expected file '//trim(fname)//' does not exist')
          endif
@@ -416,8 +433,10 @@ contains
          fname = 'INPUT/fv_land.res'//trim(suffix)//'.nc'
          Atm(1)%Lnd_restart_is_open = open_file(Atm(1)%Lnd_restart, fname, "read", fv_domain, is_restart=.true.)
          if (Atm(1)%Lnd_restart_is_open) then
+           call fv_io_register_restart(Atm(1))
            call read_restart(Atm(1)%Lnd_restart)
            call close_file(Atm(1)%Lnd_restart)
+           Atm(1)%Lnd_restart_is_open = .false.
          else
            call mpp_error(NOTE,'==> Warning from fv_read_restart: Expected file '//trim(fname)//' does not exist')
          endif
@@ -540,9 +559,6 @@ contains
            allocate ( ze0_r(isc:iec, jsc:jec,  npz_rst+1) )
     endif
 
-    ! Register restarts before read
-    call fv_io_register_restart(Atm(1))
-
     fname = 'INPUT/fv_core.res.nc'
     if (open_file(Fv_restart_r,fname,"read", is_restart=.true.)) then
        call read_data(Fv_restart_r, 'ak', ak_r(:))
@@ -583,9 +599,10 @@ contains
        Atm(1)%Rsf_restart_is_open = open_file(Atm(1)%Rsf_restart, fname, "read", fv_domain, is_restart=.true.)
        if (Atm(1)%Rsf_restart_is_open) then
           Atm%flagstruct%srf_init = .true.
+          call fv_io_register_restart(Atm(1))
           call read_restart(Atm(1)%Rsf_restart)
           call close_file(Atm(1)%Rsf_restart)
-       else
+          Atm(1)%Rsf_restart_is_open = .false.
          call mpp_error(NOTE,'==> Warning from remap_restart: Expected file '//trim(fname)//' does not exist')
          Atm%flagstruct%srf_init = .false.
        endif
@@ -722,9 +739,6 @@ contains
 !!$       !call save_restart(Atm%SST_restart, timestamp)
 !!$    endif
 
-    ! Register restarts before write
-    call fv_io_register_restart(Atm)
-
     if ( (use_ncep_sst .or. Atm%flagstruct%nudge) .and. .not. Atm%gridstruct%nested ) then
        !call save_restart(Atm%SST_restart, timestamp)
     endif
@@ -738,8 +752,10 @@ contains
     fname = 'RESTART/fv_core.res'//trim(suffix)//'.nc'
     Atm%Fv_restart_is_open = open_file(Atm%Fv_restart, fname, "overwrite", is_restart=.true.)
     if (Atm%Fv_restart_is_open) then
+       call fv_io_register_restart(Atm)
        call write_restart(Atm%Fv_restart)
        call close_file(Atm%Fv_restart)
+       Atm%Fv_restart_is_open = .false.
     endif
 
     ntiles = mpp_get_ntile_count(fv_domain)
@@ -755,38 +771,48 @@ contains
     fname = 'RESTART/fv_core.res'//trim(suffix)//'.nc'
     Atm%Fv_restart_tile_is_open = open_file(Atm%Fv_restart_tile, fname, "overwrite", fv_domain, is_restart=.true.)
     if (Atm%Fv_restart_tile_is_open) then
+       call fv_io_register_restart(Atm)
        call write_restart (Atm%Fv_restart_tile)
        call close_file (Atm%Fv_restart_tile)
+       Atm%Fv_restart_tile_is_open = .false.
     endif
 
     fname = 'RESTART/fv_srf_wnd.res'//trim(suffix)//'.nc'
     Atm%Rsf_restart_is_open = open_file(Atm%Rsf_restart, fname, "overwrite", fv_domain, is_restart=.true.)
     if (Atm%Rsf_restart_is_open) then
+       call fv_io_register_restart(Atm)
        call write_restart (Atm%Rsf_restart)
        call close_file (Atm%Rsf_restart)
+       Atm%Rsf_restart_is_open = .false.
     endif
 
     if ( Atm%flagstruct%fv_land ) then
        fname = 'RESTART/mg_drag.res'//trim(suffix)//'.nc'
        Atm%Mg_restart_is_open = open_file(Atm%Mg_restart, fname, "overwrite", fv_domain, is_restart=.true.)
        if (Atm%Mg_restart_is_open) then
+          call fv_io_register_restart(Atm)
           call write_restart(Atm%Mg_restart)
           call close_file(Atm%Mg_restart)
+          Atm%Mg_restart_is_open = .false.
        endif
 
       fname = 'RESTART/fv_land.res'//trim(suffix)//'.nc'
       Atm%Lnd_restart_is_open = open_file(Atm%Lnd_restart, fname, "overwrite", fv_domain, is_restart=.true.)
       if (Atm%Lnd_restart_is_open) then
+          call fv_io_register_restart(Atm)
           call write_restart(Atm%Lnd_restart)
           call close_file(Atm%Lnd_restart)
+          Atm%Lnd_restart_is_open = .false.
        endif
     endif
 
     fname = 'RESTART/fv_tracer.res'//trim(suffix)//'.nc'
     Atm%Tra_restart_is_open = open_file(Atm%Tra_restart, fname, "overwrite", fv_domain, is_restart=.true.)
     if (Atm%Tra_restart_is_open) then
+       call fv_io_register_restart(Atm)
        call write_restart(Atm%Tra_restart)
        call close_file(Atm%Tra_restart)
+       Atm%Tra_restart_is_open = .false.
     endif
   end subroutine  fv_io_write_restart
 

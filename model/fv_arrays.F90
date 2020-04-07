@@ -834,6 +834,7 @@ module fv_arrays_mod
      logical :: Mg_restart_is_open=.false.
      logical :: Lnd_restart_is_open=.false.
      logical :: Tra_restart_is_open=.false.
+     logical :: fmsio_is_registered=.false.
      type(fv_nest_type) :: neststruct
 
      !Hold on to coarse-grid global grid, so we don't have to waste processor time getting it again when starting to do grid nesting
