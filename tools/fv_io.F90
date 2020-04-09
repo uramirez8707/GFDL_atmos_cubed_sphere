@@ -723,6 +723,7 @@ contains
     type(FmsNetcdfFile_t)       ::  Fv_restart
     type(FmsNetcdfDomainFile_t) ::  Fv_restart_tile, Tra_restart, Rsf_restart, Mg_restart, Lnd_restart
     type(domain2d)     :: fv_domain
+    character(len=28) :: timestamp_preffix
 
 !!$    if ( use_ncep_sst .or. Atm%flagstruct%nudge .or. Atm%flagstruct%ncep_ic ) then
 !!$       call mpp_error(NOTE, 'READING FROM SST_RESTART DISABLED')
@@ -733,19 +734,23 @@ contains
 !    if ( (use_ncep_sst .or. Atm%flagstruct%nudge) .and. .not. Atm%gridstruct%nested ) then
 !       call save_restart(Atm%SST_restart, timestamp)
 !    endif
+    timestamp_preffix = ''
+    if (present(timestamp)) then
+      timestamp_preffix = ""//trim(timestamp)//"."
+    endif
 
     ntiles = mpp_get_ntile_count(fv_domain)
 !    do n = 1, ntileMe
-       if (open_file(Fv_restart,"RESTART/fv_core.res.nc","overwrite", is_restart=.true.)) then
+       if (open_file(Fv_restart,"RESTART/"//trim(timestamp_preffix)//"fv_core.res.nc","overwrite", is_restart=.true.)) then
           call register_fv_core_res(Fv_restart, Atm)
           call write_restart(Fv_restart)
           call close_file(Fv_restart)
        endif
 
        if (ntiles > 1) then
-          tile_file_exists = open_file(Fv_restart_tile,"RESTART/fv_core.res.nc","overwrite", fv_domain, is_restart=.true.)
+          tile_file_exists = open_file(Fv_restart_tile,"RESTART/"//trim(timestamp_preffix)//"fv_core.res.nc","overwrite", fv_domain, is_restart=.true.)
        else
-          tile_file_exists = open_file(Fv_restart_tile,"RESTART/fv_core.res.nc","append", fv_domain, is_restart=.true.)
+          tile_file_exists = open_file(Fv_restart_tile,"RESTART/"//trim(timestamp_preffix)//"fv_core.res.nc","append", fv_domain, is_restart=.true.)
        endif
 
        if (tile_file_exists) then
@@ -754,27 +759,27 @@ contains
           call close_file (Fv_restart_tile)
        endif
 
-       if (open_file(Rsf_restart,"RESTART/fv_srf_wnd.res.nc","overwrite", fv_domain, is_restart=.true.)) then
+       if (open_file(Rsf_restart,"RESTART/"//trim(timestamp_preffix)//"fv_srf_wnd.res.nc","overwrite", fv_domain, is_restart=.true.)) then
           call register_fv_srf_wnd_res(Rsf_restart, Atm)
           call write_restart (Rsf_restart)
           call close_file (Rsf_restart)
        endif
 
        if ( Atm%flagstruct%fv_land ) then
-          if (open_file(Mg_restart,"RESTART/mg_drag.res.nc","overwrite", fv_domain, is_restart=.true.)) then
+          if (open_file(Mg_restart,"RESTART/"//trim(timestamp_preffix)//"mg_drag.res.nc","overwrite", fv_domain, is_restart=.true.)) then
              call register_mg_restart(Mg_restart, Atm)
              call write_restart(Mg_restart)
              call close_file(Mg_restart)
           endif
 
-          if (open_file(Lnd_restart,"RESTART/fv_land.res.nc","overwrite",fv_domain, is_restart=.true.)) then
+          if (open_file(Lnd_restart,"RESTART/"//trim(timestamp_preffix)//"fv_land.res.nc","overwrite",fv_domain, is_restart=.true.)) then
              call register_lnd_restart(Lnd_restart, Atm)
              call write_restart(Lnd_restart)
              call close_file(Lnd_restart)
           endif
        endif
 
-       if (open_file(Tra_restart,"RESTART/fv_tracer.res.nc","overwrite",fv_domain, is_restart=.true.)) then
+       if (open_file(Tra_restart,"RESTART/"//trim(timestamp_preffix)//"fv_tracer.res.nc","overwrite",fv_domain, is_restart=.true.)) then
           call register_fv_tracer_res(Tra_restart, Atm)
           call write_restart(Tra_restart)
           call close_file(Tra_restart)
