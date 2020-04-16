@@ -36,8 +36,7 @@ module fv_io_mod
   use fms_mod,                 only: file_exist
   use fms_io_mod,              only: restart_file_type, set_domain, &
                                      fms_io_register_restart_field => register_restart_field, &
-                                     save_restart_border, restore_state_border, field_exist, &
-                                     set_filename_appendix
+                                     save_restart_border, restore_state_border, field_exist
   use fms2_io_mod,             only: FmsNetcdfFile_t, FmsNetcdfDomainFile_t, &
                                      register_restart_field, register_axis, unlimited, &
                                      open_file, read_restart, write_restart,close_file, &
@@ -193,7 +192,6 @@ contains
     character(len=8), dimension(2)  :: dim_names_2d
     character(len=8), dimension(4)  :: dim_names_4d, dim_names_4d2, dim_names_4d3
     character(len=8), dimension(3)  :: dim_names_3d, dim_names_3d2
-    character(len=6) :: gn
     integer           :: i, j
     integer           :: nt, ntracers, ntprog, ntdiag
     integer, dimension(:), allocatable :: buffer
@@ -219,19 +217,6 @@ contains
     xpos_2d = (/CENTER, EAST/)
     ypos = (/CENTER/)
     ypos_2d = (/NORTH, CENTER/)
-
-
-!--- set the 'nestXX' appendix for all files using fms_io
-    if (Atm%grid_number > 1) then
-       write(gn,'(A4, I2.2)') "nest", Atm%grid_number
-    else
-       gn = ''
-    end if
-    call set_filename_appendix(gn)
-    if (.not. Atm%fmsio_is_registered .and. Atm%neststruct%nested) then
-       call fv_io_register_restart_BCs(Atm)
-       Atm%fmsio_is_registered = .true.
-    endif
 
     ! fname = 'fv_core.res.nc'
     if (Atm%Fv_restart_is_open) then
