@@ -160,7 +160,7 @@ contains
 
     call register_axis(file_obj, "Time", unlimited)
     if (.not. file_obj%is_readonly) then !if writing file
-       call register_field(file_obj, "Time", "double", (/"Time"/))
+       call register_field(file_obj, "Time", "double", (/"Time   "/))
        call register_variable_attribute(file_obj, "Time", "cartesian_axis", "T")
        call register_variable_attribute(file_obj, "Time", "units", "time level")
        call register_variable_attribute(file_obj, "Time", "long_name", "Time")
@@ -177,7 +177,7 @@ contains
     integer, dimension(:), allocatable :: buffer
     character(len=8), dimension(2)             :: dim_names
 
-   dim_names =  (/"xaxis_1", "Time"/)
+   dim_names =  (/"xaxis_1", "Time   "/)
 
    call register_axis(Fv_restart, "xaxis_1", size(Atm%ak(:), 1))
    call register_axis(Fv_restart, "Time", unlimited)
@@ -244,10 +244,10 @@ contains
     character(len=8), dimension(4)             :: dim_names_4d, dim_names_4d2, dim_names_4d3
     character(len=8), dimension(3)             :: dim_names_3d
 
-    dim_names_4d =  (/"xaxis_1", "yaxis_1", "zaxis_1", "Time"/)
-    dim_names_4d2 =  (/"xaxis_2", "yaxis_2", "zaxis_1", "Time"/)
-    dim_names_4d3 =  (/"xaxis_1", "yaxis_2", "zaxis_1", "Time"/)
-    dim_names_3d =  (/"xaxis_1", "yaxis_2", "Time"/)
+    dim_names_4d =  (/"xaxis_1", "yaxis_1", "zaxis_1", "Time   "/)
+    dim_names_4d2 =  (/"xaxis_2", "yaxis_2", "zaxis_1", "Time   "/)
+    dim_names_4d3 =  (/"xaxis_1", "yaxis_2", "zaxis_1", "Time   "/)
+    dim_names_3d =  (/"xaxis_1", "yaxis_2", "Time   "/)
 
     xpos = (/CENTER, EAST/)
     ypos = (/NORTH, CENTER/)
@@ -290,7 +290,7 @@ contains
     character(len=64) :: tracer_name
     character(len=8), dimension(4)             :: dim_names
 
-    dim_names =  (/"xaxis_1", "yaxis_1", "zaxis_1", "Time"/)
+    dim_names =  (/"xaxis_1", "yaxis_1", "zaxis_1", "Time   "/)
     xpos = (/CENTER/)
     ypos = (/CENTER/)
     zsize = (/size(Atm%q,3)/)
@@ -333,7 +333,7 @@ contains
     xpos = (/CENTER/)
     ypos = (/CENTER/)
 
-    dim_names =  (/"xaxis_1", "yaxis_1", "Time"/)
+    dim_names =  (/"xaxis_1", "yaxis_1", "Time   "/)
     call register_fv_axis(Rsf_restart, numx=numx, numy=numy, xpos=xpos, ypos=ypos)
     call register_restart_field(Rsf_restart, 'u_srf', Atm%u_srf, dim_names)
     call register_restart_field(Rsf_restart, 'v_srf', Atm%v_srf, dim_names)
