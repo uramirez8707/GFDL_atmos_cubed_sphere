@@ -51,8 +51,8 @@ module fv_grid_tools_mod
                                SCALAR_PAIR,              &
                                CORNER, CENTER, XUPDATE
   use fms_mod,           only: get_mosaic_tile_grid
-  use fms_io_mod,        only: file_exist, field_exist, read_data, &
-                               get_global_att_value, get_var_att_value
+  use fms2_io_mod,       only: file_exists, variable_exists, open_file, read_data, &
+                               get_global_attribute, get_variable_attribute, close_file
   use mosaic_mod,       only : get_mosaic_ntiles
 
   use mpp_mod, only: mpp_transmit, mpp_recv
@@ -106,59 +106,63 @@ contains
     jed = Atm%bd%jed
     grid  => Atm%gridstruct%grid_64
 
-    if(.not. file_exist(grid_file)) call mpp_error(FATAL, 'fv_grid_tools(read_grid): file '// &
+    if(.not. file_exists(grid_file)) call mpp_error(FATAL, 'fv_grid_tools(read_grid): file '// &
          trim(grid_file)//' does not exist')
 
     !--- make sure the grid file is mosaic file.
-    if( field_exist(grid_file, 'atm_mosaic_file') .OR. field_exist(grid_file, 'gridfiles') ) then
-       stdunit = stdout()
-       write(stdunit,*) '==>Note from fv_grid_tools_mod(read_grid): read atmosphere grid from mosaic version grid'
-    else
-       call mpp_error(FATAL, 'fv_grid_tools(read_grid): neither atm_mosaic_file nor gridfiles exists in file ' &
-            //trim(grid_file))
+    if( open_file(Atm%Grid_input, grid_file, "read") ) then
+       if( variable_exists(Atm%Grid_input, 'atm_mosaic_file') .OR. variable_exists(Atm%Grid_input, 'gridfiles') ) then
+          stdunit = stdout()
+          write(stdunit,*) '==>Note from fv_grid_tools_mod(read_grid): read atmosphere grid from mosaic version grid'
+       else
+          call mpp_error(FATAL, 'fv_grid_tools(read_grid): neither atm_mosaic_file nor gridfiles exists in file ' &
+               //trim(grid_file))
+       endif
+
+       if(variable_exists(Atm%Grid_input, 'atm_mosaic_file') ) then
+          call read_data(Atm%Grid_input, "atm_mosaic_file", atm_mosaic)
+          atm_mosaic = "INPUT/"//trim(atm_mosaic)
+       else
+          atm_mosaic = trim(grid_file)
+       endif
     endif
 
-    if(field_exist(grid_file, 'atm_mosaic_file')) then
-       call read_data(grid_file, "atm_mosaic_file", atm_mosaic)
-       atm_mosaic = "INPUT/"//trim(atm_mosaic)
-    else
-       atm_mosaic = trim(grid_file)
-    endif
 
     call get_mosaic_tile_grid(atm_hgrid, atm_mosaic, Atm%domain)
 
     grid_form = "none"
-    if( get_global_att_value(atm_hgrid, "history", attvalue) ) then
+    if (open_file(Atm%Grid_input, atm_hgrid, "read")) then
+       call get_global_attribute(Atm%Grid_input, "history", attvalue)
        if( index(attvalue, "gnomonic_ed") > 0) grid_form = "gnomonic_ed"
-    endif
-    if(grid_form .NE. "gnomonic_ed") call mpp_error(FATAL, &
-         "fv_grid_tools(read_grid): the grid should be 'gnomonic_ed' when reading from grid file, contact developer")
+       if(grid_form .NE. "gnomonic_ed") call mpp_error(FATAL, &
+            "fv_grid_tools(read_grid): the grid should be 'gnomonic_ed' when reading from grid file, contact developer")
 
-    !FIXME: Doesn't work for a nested grid
-    ntiles = get_mosaic_ntiles(atm_mosaic)
-    if( .not. Atm%gridstruct%bounded_domain) then  !<-- The regional setup has only 1 tile so do not shutdown in that case.
-       if(ntiles .NE. 6) call mpp_error(FATAL, &
-            'fv_grid_tools(read_grid): ntiles should be 6 in mosaic file '//trim(atm_mosaic) )
-       if(nregions .NE. 6) call mpp_error(FATAL, &
-            'fv_grid_tools(read_grid): nregions should be 6 when reading from mosaic file '//trim(grid_file) )
-    endif
+       !FIXME: Doesn't work for a nested grid
+       ntiles = get_mosaic_ntiles(atm_mosaic)
+       if( .not. Atm%gridstruct%bounded_domain) then  !<-- The regional setup has only 1 tile so do not shutdown in that case.
+          if(ntiles .NE. 6) call mpp_error(FATAL, &
+               'fv_grid_tools(read_grid): ntiles should be 6 in mosaic file '//trim(atm_mosaic) )
+          if(nregions .NE. 6) call mpp_error(FATAL, &
+               'fv_grid_tools(read_grid): nregions should be 6 when reading from mosaic file '//trim(grid_file) )
+       endif
 
-    call get_var_att_value(atm_hgrid, 'x', 'units', units)
+       call get_variable_attribute(Atm%Grid_input, 'x', 'units', units)
 
-    !--- get the geographical coordinates of super-grid.
-    isc2 = 2*is-1; iec2 = 2*ie+1
-    jsc2 = 2*js-1; jec2 = 2*je+1
-    if( Atm%gridstruct%bounded_domain ) then
-      isc2 = 2*(isd+halo)-1; iec2 = 2*(ied+1+halo)-1   ! For the regional domain the cell corner locations must be transferred
-      jsc2 = 2*(jsd+halo)-1; jec2 = 2*(jed+1+halo)-1   ! from the entire supergrid to the compute grid, including the halo region.
+       !--- get the geographical coordinates of super-grid.
+       isc2 = 2*is-1; iec2 = 2*ie+1
+       jsc2 = 2*js-1; jec2 = 2*je+1
+       if( Atm%gridstruct%bounded_domain ) then
+         isc2 = 2*(isd+halo)-1; iec2 = 2*(ied+1+halo)-1   ! For the regional domain the cell corner locations must be transferred
+         jsc2 = 2*(jsd+halo)-1; jec2 = 2*(jed+1+halo)-1   ! from the entire supergrid to the compute grid, including the halo region.
+       endif
+       allocate(tmpx(isc2:iec2, jsc2:jec2) )
+       allocate(tmpy(isc2:iec2, jsc2:jec2) )
+       start = 1; nread = 1
+       start(1) = isc2; nread(1) = iec2 - isc2 + 1
+       start(2) = jsc2; nread(2) = jec2 - jsc2 + 1
+       call read_data(Atm%Grid_input, 'x', tmpx, corner=start, edge_lengths=nread)  !<-- tmpx (lon, deg east) is on the supergrid
+       call read_data(Atm%Grid_input, 'y', tmpy, corner=start, edge_lengths=nread)  !<-- tmpy (lat, deg) is on the supergrid
     endif
-    allocate(tmpx(isc2:iec2, jsc2:jec2) )
-    allocate(tmpy(isc2:iec2, jsc2:jec2) )
-    start = 1; nread = 1
-    start(1) = isc2; nread(1) = iec2 - isc2 + 1
-    start(2) = jsc2; nread(2) = jec2 - jsc2 + 1
-    call read_data(atm_hgrid, 'x', tmpx, start, nread, no_domain=.TRUE.)  !<-- tmpx (lon, deg east) is on the supergrid
-    call read_data(atm_hgrid, 'y', tmpy, start, nread, no_domain=.TRUE.)  !<-- tmpy (lat, deg) is on the supergrid
 
     !--- geographic grid at cell corner
     grid(isd: is-1, jsd:js-1,1:ndims)=0.

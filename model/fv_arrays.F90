@@ -824,7 +824,7 @@ module fv_arrays_mod
 !!!!!!!!!!!!!!
 ! From fv_io !
 !!!!!!!!!!!!!!
-     type(FmsNetcdfFile_t) :: Fv_restart
+     type(FmsNetcdfFile_t) :: Fv_restart, Grid_input
      type(FmsNetcdfDomainFile_t) :: SST_restart, Fv_restart_tile, &
           Rsf_restart, Mg_restart, Lnd_restart, Tra_restart
      logical :: Fv_restart_is_open=.false.
