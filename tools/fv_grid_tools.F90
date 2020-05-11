@@ -125,8 +125,8 @@ contains
        else
           atm_mosaic = trim(grid_file)
        endif
+       call close_file(Atm%Grid_input)
     endif
-
 
     call get_mosaic_tile_grid(atm_hgrid, atm_mosaic, Atm%domain)
 
@@ -162,6 +162,7 @@ contains
        start(2) = jsc2; nread(2) = jec2 - jsc2 + 1
        call read_data(Atm%Grid_input, 'x', tmpx, corner=start, edge_lengths=nread)  !<-- tmpx (lon, deg east) is on the supergrid
        call read_data(Atm%Grid_input, 'y', tmpy, corner=start, edge_lengths=nread)  !<-- tmpy (lat, deg) is on the supergrid
+       call close_file(Atm%Grid_input)
     endif
 
     !--- geographic grid at cell corner
