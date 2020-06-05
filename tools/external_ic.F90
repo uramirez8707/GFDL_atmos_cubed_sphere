@@ -32,7 +32,7 @@ module external_ic_mod
                                  get_variable_size, get_global_attribute, FmsNetcdfFile_t, &
                                  FmsNetcdfDomainFile_t, register_restart_field, read_restart
    use fms_mod,            only: open_namelist_file, check_nml_error, close_nml_file => close_file
-   use fms_io_mod,         only: get_tile_string, free_restart_type
+   use fms_io_mod,         only: get_tile_string
    use fms_io_mod,         only: set_filename_appendix
    use mpp_mod,            only: mpp_error, FATAL, NOTE, mpp_pe, mpp_root_pe
    use mpp_mod,            only: stdlog, input_nml_file
