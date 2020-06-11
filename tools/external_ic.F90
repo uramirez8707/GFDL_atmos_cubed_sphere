@@ -396,12 +396,12 @@ contains
       ntdiag = ntracers-ntprog
 
 !--- set the 'nestXX' appendix for all files using fms_io
-      if (Atm%grid_number > 1) then
-         write(gn,'(A4, I2.2)') "nest", Atm%grid_number
-      else
-         gn = ''
-      end if
-      call set_filename_appendix('')
+      !if (Atm%grid_number > 1) then
+      !   write(gn,'(A4, I2.2)') "nest", Atm%grid_number
+      !else
+      !   gn = ''
+      !end if
+      !call set_filename_appendix('')
 
       fname = 'INPUT/'//trim(fn_gfs_ctl)
       if( open_file(Gfs_ctl, fname, "read") ) then
@@ -3639,13 +3639,13 @@ subroutine pmaxmn(qname, q, is, ie, js, je, km, fac, area, domain)
 ! Use the fms call here so we can actually get the return code value.
 !
       if (regional) then
-       if (open_file(Gfs_data , 'gfs_data.nc', "read")) then
+       if (open_file(Gfs_data , 'INPUT/gfs_data.nc', "read")) then
          lstatus = global_att_exists(Gfs_data, "source")
          if(lstatus) call get_global_attribute(Gfs_data, "source", source)
          call close_file(Gfs_data)
        endif
       else
-       if (open_file(Gfs_data , 'gfs_data.tile1.nc', "read")) then
+       if (open_file(Gfs_data , 'INPUT/gfs_data.tile1.nc', "read")) then
          lstatus = global_att_exists(Gfs_data, "source")
          if(lstatus) call get_global_attribute(Gfs_data, "source", source)
          call close_file(Gfs_data)
