@@ -339,6 +339,8 @@ contains
       integer :: levp = 64
       logical :: checker_tr = .false.
       integer :: nt_checker = 0
+      character(len=20) :: suffix
+      character(len=1) :: tile_num
       real(kind=R_GRID), dimension(2):: p1, p2, p3
       real(kind=R_GRID), dimension(3):: e1, e2, ex, ey
       integer:: i,j,k,nts, ks
@@ -452,6 +454,15 @@ contains
               phis_coarse(i,j) = Atm%phis(i,j)
             enddo
           enddo
+        endif
+
+        !!! If a nested grid, add "nestXX.tileX" to the filename
+        if (Atm%neststruct%nested) then
+           write(tile_num,'(I1)') Atm%neststruct%nestupdate
+           suffix = ''//trim(Atm%nml_filename)//".tile"//trim(tile_num)//""
+           fn_sfc_ics = fn_sfc_ics(1:len_trim(fn_sfc_ics)-2)//trim(suffix)//".nc"
+           fn_oro_ics = fn_oro_ics(1:len_trim(fn_oro_ics)-2)//trim(suffix)//".nc"
+           fn_gfs_ics = fn_gfs_ics(1:len_trim(fn_gfs_ics)-2)//trim(suffix)//".nc"
         endif
 
 !--- read in surface temperature (k) and land-frac
@@ -1376,6 +1387,8 @@ contains
       character(len=64) :: fn_oro_ics = 'INPUT/oro_data.nc'
       character(len=64) :: fn_gfs_ics = 'INPUT/gfs_data.nc'
       character(len=64) :: fn_gfs_ctl = 'gfs_ctrl.nc'
+      character(len=20) :: suffix
+      character(len=1) :: tile_num
       logical :: filtered_terrain = .true.
       namelist /external_ic_nml/ filtered_terrain
 
@@ -1427,6 +1440,14 @@ contains
 !!$      else
 !!$         call set_eta(npz, ks, Atm%ptop, Atm%ak, Atm%bk, Atm%flagstruct%npz_type)
 !!$      endif
+
+      !!! If a nested grid, add "nestXX.tileX" to the filename
+      if (Atm%neststruct%nested) then
+         write(tile_num,'(I1)') Atm%neststruct%nestupdate
+         suffix = ''//trim(Atm%nml_filename)//".tile"//trim(tile_num)//""
+         fn_oro_ics = fn_oro_ics(1:len_trim(fn_oro_ics)-2)//trim(suffix)//".nc"
+         fn_gfs_ics = fn_gfs_ics(1:len_trim(fn_gfs_ics)-2)//trim(suffix)//".nc"
+      endif
 
 !! Read in model terrain from oro_data.tile?.nc
       if( open_file(ORO_restart, fn_oro_ics, "read", Atm%domain) ) then
