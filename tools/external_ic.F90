@@ -468,13 +468,10 @@ contains
 
 !--- read in surface temperature (k) and land-frac
         ! surface skin temperature
-       if( open_file(SFC_restart, fn_sfc_ics, "read", Atm%domain) ) then
-          SFC_restart%is_restart = .true.
-          allocate(SFC_restart%restart_vars(200))
-          SFC_restart%num_restart_vars = 0
-          call register_axis(SFC_restart, 'lat', 48)
-          call register_axis(SFC_restart, 'lon', 48)
-          call register_restart_field(SFC_restart, 'tsea', Atm%ts)
+       if( open_file(SFC_restart, fn_sfc_ics, "read", Atm%domain, is_restart=.true., dont_add_res_to_filename=.true.) ) then
+          call register_axis(SFC_restart, "lat", "y")
+          call register_axis(SFC_restart, "lon", "x")
+          call register_restart_field(SFC_restart, 'tsea', Atm%ts, (/"lat","lon"/))
           call read_restart(SFC_restart)
           call close_file(SFC_restart)
         else
@@ -483,16 +480,13 @@ contains
         call mpp_error(NOTE,'==> External_ic::get_nggps_ic: using tiled data file '//trim(fn_sfc_ics)//' for NGGPS IC')
 
         ! terrain surface height -- (needs to be transformed into phis = zs*grav)
-        if( open_file(ORO_restart, fn_oro_ics, "read", Atm%domain) ) then
-          ORO_restart%is_restart = .true.
-          allocate(ORO_restart%restart_vars(200))
-          ORO_restart%num_restart_vars = 0
-          call register_axis(ORO_restart, 'lat', 48)
-          call register_axis(ORO_restart, 'lon', 48)
+        if( open_file(ORO_restart, fn_oro_ics, "read", Atm%domain, is_restart=.true., dont_add_res_to_filename=.true.) ) then
+          call register_axis(ORO_restart, "lat", "y")
+          call register_axis(ORO_restart, "lon", "x")
           if (filtered_terrain) then
-            call register_restart_field(ORO_restart, 'orog_filt', Atm%phis)
+            call register_restart_field(ORO_restart, 'orog_filt', Atm%phis, (/"lat", "lon"/))
           elseif (.not. filtered_terrain) then
-            call register_restart_field(ORO_restart, 'orog_raw', Atm%phis)
+            call register_restart_field(ORO_restart, 'orog_raw', Atm%phis, (/"lat", "lon"/))
           endif
           
 
@@ -500,7 +494,7 @@ contains
              allocate (oro_g(isd:ied,jsd:jed))
              oro_g = 0.
             ! land-frac
-            call register_restart_field(ORO_restart, 'land_frac', oro_g)
+            call register_restart_field(ORO_restart, 'land_frac', oro_g, (/"lat", "lon"/))
             call mpp_update_domains(oro_g, Atm%domain)
             if (Atm%neststruct%nested) then
                call extrapolation_BC(oro_g, 0, 0, Atm%npx, Atm%npy, Atm%bd, .true.)
@@ -509,9 +503,9 @@ contains
 
           if ( Atm%flagstruct%fv_land ) then
             ! stddev
-            call register_restart_field(ORO_restart, 'stddev', Atm%sgh)
+            call register_restart_field(ORO_restart, 'stddev', Atm%sgh, (/"lat", "lon"/))
             ! land-frac
-            call register_restart_field(ORO_restart, 'land_frac', Atm%oro)
+            call register_restart_field(ORO_restart, 'land_frac', Atm%oro, (/"lat", "lon"/))
           endif
           call read_restart(ORO_restart)
           call close_file(ORO_restart)
@@ -521,42 +515,36 @@ contains
         call mpp_error(NOTE,'==> External_ic::get_nggps_ic: using tiled data file '//trim(fn_oro_ics)//' for NGGPS IC')
 
         ! surface pressure (Pa)
-        if( open_file(GFS_restart, fn_gfs_ics, "read", Atm%domain) ) then
-          GFS_restart%is_restart = .true.
-          allocate(GFS_restart%restart_vars(200))
-          GFS_restart%num_restart_vars = 0
-          call register_axis(GFS_restart, 'lat', 48)
-          call register_axis(GFS_restart, 'lon', 48)
-          call register_axis(GFS_restart, 'lonp', 49)
-          call register_axis(GFS_restart, 'latp', 49)
+        if( open_file(GFS_restart, fn_gfs_ics, "read", Atm%domain, is_restart=.true., dont_add_res_to_filename=.true.) ) then
+          call register_axis(GFS_restart, "lat", "y")
+          call register_axis(GFS_restart, "lon", "x")
+          call register_axis(GFS_restart, "lonp", "x", domain_position=east)
+          call register_axis(GFS_restart, "latp", "y", domain_position=north)
           call register_axis(GFS_restart, 'lev', 64)
           call register_axis(GFS_restart, 'levp', 65)
           call register_axis(GFS_restart, 'ntracer', 3)
 
-          call register_restart_field(GFS_restart, 'ps', ps)
+          call register_restart_field(GFS_restart, 'ps', ps, (/"lat", "lon"/))
           ! D-grid west  face tangential wind component (m/s)
-          call register_restart_field(GFS_restart, 'u_w', u_w)
+          call register_restart_field(GFS_restart, 'u_w', u_w, (/"lev","lat", "lonp"/))
           ! D-grid west  face normal wind component (m/s)
-          call register_restart_field(GFS_restart, 'v_w', v_w)
+          call register_restart_field(GFS_restart, 'v_w', v_w, (/"lev","lat", "lonp"/))
           ! D-grid south face tangential wind component (m/s)
-          call register_restart_field(GFS_restart, 'u_s', u_s)
+          call register_restart_field(GFS_restart, 'u_s', u_s, (/"lev","latp", "lon"/))
           ! D-grid south face normal wind component (m/s)
-          call register_restart_field(GFS_restart, 'v_s', v_s)
+          call register_restart_field(GFS_restart, 'v_s', v_s, (/"lev","latp", "lon"/))
           ! vertical velocity 'omega' (Pa/s)
-          call register_restart_field(GFS_restart, 'w', omga)
+          call register_restart_field(GFS_restart, 'w', omga, (/"lev","lat", "lon"/))
           ! GFS grid height at edges (including surface height)
-          call register_restart_field(GFS_restart, 'zh', zh)
+          call register_restart_field(GFS_restart, 'zh', zh, (/"lev","lat", "lon"/))
 
           ! real temperature (K)
-          if (trim(source) == source_fv3gfs .and. variable_exists(GFS_restart,'t')) call read_data(GFS_restart, 't', temp)
+          if (trim(source) == source_fv3gfs) call register_restart_field(GFS_restart, 't', temp, is_optional=.true.)
           ! prognostic tracers
           do nt = 1, ntracers
              q(:,:,:,nt) = -999.99
             call get_tracer_names(MODEL_ATMOS, nt, tracer_name)
-            if ( variable_exists(GFS_restart,trim(tracer_name)) ) then
-             call register_restart_field(GFS_restart, trim(tracer_name), q(:,:,:,nt))
-             cycle
-            endif
+            call register_restart_field(GFS_restart, trim(tracer_name), q(:,:,:,nt), is_optional=.true.)
           enddo
           call read_restart(GFS_restart)
           call close_file(GFS_restart)
@@ -1475,16 +1463,13 @@ contains
       endif
 
 !! Read in model terrain from oro_data.tile?.nc
-      if( open_file(ORO_restart, fn_oro_ics, "read", Atm%domain) ) then
-        ORO_restart%is_restart = .true.
-        allocate(ORO_restart%restart_vars(200))
-        ORO_restart%num_restart_vars = 0
-        call register_axis(ORO_restart, 'lat', 48)
-        call register_axis(ORO_restart, 'lon', 48)
+      if( open_file(ORO_restart, fn_oro_ics, "read", Atm%domain, is_restart=.true., dont_add_res_to_filename=.true.) ) then
+        call register_axis(ORO_restart, "lat", "y")
+        call register_axis(ORO_restart, "lon", "x")
         if (filtered_terrain) then
-            call register_restart_field(ORO_restart, 'orog_filt', Atm%phis)
+            call register_restart_field(ORO_restart, 'orog_filt', Atm%phis, (/"lat","lon"/))
           elseif (.not. filtered_terrain) then
-            call register_restart_field(ORO_restart, 'orog_raw', Atm%phis)
+            call register_restart_field(ORO_restart, 'orog_raw', Atm%phis, (/"lat","lon"/))
         endif
         call read_restart(ORO_restart)
         call close_file(ORO_restart)
@@ -1498,20 +1483,14 @@ contains
       allocate (ps_gfs(is:ie,js:je))
       allocate (zh_gfs(is:ie,js:je,levp_gfs+1))
 
-      if( open_file(GFS_restart, fn_gfs_ics, "read", Atm%domain) ) then
-        GFS_restart%is_restart = .true.
-        allocate(GFS_restart%restart_vars(200))
-        GFS_restart%num_restart_vars = 0
-        call register_axis(GFS_restart, 'lat', 48)
-        call register_axis(GFS_restart, 'lon', 48)
-        call register_axis(GFS_restart, 'lonp', 49)
-        call register_axis(GFS_restart, 'latp', 49)
-        call register_axis(GFS_restart, 'lev', 64)
-        call register_axis(GFS_restart, 'levp', 65)
-        call register_axis(GFS_restart, 'ntracer', 3)
-        if ( variable_exists(GFS_restart, 'o3mr') ) call register_restart_field(GFS_restart, 'o3mr', o3mr_gfs)
-        call register_restart_field(GFS_restart, 'ps', ps_gfs)
-        call register_restart_field(GFS_restart, 'ZH', zh_gfs)
+      if( open_file(GFS_restart, fn_gfs_ics, "read", Atm%domain, is_restart=.true., dont_add_res_to_filename=.true.) ) then
+        call register_axis(GFS_restart, "lat", "y")
+        call register_axis(GFS_restart, "lon", "x")
+        call register_axis(GFS_restart, "lev", 64)
+        call register_axis(GFS_restart, "lev", 65)
+        call register_restart_field(GFS_restart, 'o3mr', o3mr_gfs, (/"lev","lat","lon"/), is_optional=.true.)
+        call register_restart_field(GFS_restart, 'ps', ps_gfs, (/"lat","lon"/))
+        call register_restart_field(GFS_restart, 'ZH', zh_gfs, (/"levp","lat","lon"/))
         call read_restart(GFS_restart)
         call close_file(GFS_restart)
       endif
