@@ -22,9 +22,9 @@ module fv_cmip_diag_mod
 
 use mpp_mod,            only: input_nml_file
 use fms_mod,            only: open_namelist_file, check_nml_error, &
-                              close_file, stdlog, mpp_pe, mpp_root_pe, &
-                              write_version_number, file_exist, &
-                              error_mesg, FATAL, WARNING, NOTE
+                              close_file, write_version_number, file_exist
+use mpp_mod,            only: stdlog, mpp_pe, mpp_root_pe, FATAL, &
+                              WARNING, NOTE, mpp_error
 use fms_io_mod,         only: set_domain, nullify_domain, string
 use time_manager_mod,   only: time_type
 use mpp_domains_mod,    only: domain2d
@@ -114,8 +114,7 @@ integer               :: id_pl700, id_pl700_bnds, id_nv
 !-----------------------------------------------------------------------
 
   if (module_is_initialized) then
-    call error_mesg ('fv_cmip_diag_mod', &
-                     'module has already been initialized', WARNING)
+    call mpp_error (WARNING, 'fv_cmip_diag_mod: module has already been initialized')
     return
   endif
 
@@ -147,9 +146,8 @@ integer               :: id_pl700, id_pl700_bnds, id_nv
 
 ! axis identifiers
   area_id = get_diag_field_id ('dynamics', 'area')
-  if (area_id .eq. DIAG_FIELD_NOT_FOUND) call error_mesg &
-        ('fv_cmip_diag_init', 'diagnostic field "dynamics", '// &
-         '"area" is not in the diag_table', NOTE)
+  if (area_id .eq. DIAG_FIELD_NOT_FOUND) call mpp_error &
+        (NOTE, 'fv_cmip_diag_init: diagnostic field "dynamics", "area" is not in the diag_table')
 
 
 !-----------------------------------------------------------------------
@@ -446,8 +444,7 @@ real, dimension(Atm(1)%bd%isc:Atm(1)%bd%iec, &
 
 !-----------------------------------------------------------------------
 
-  if (.not.module_is_initialized) call error_mesg ('fv_cmip_diag_mod', &
-                               'module has not been initialized', FATAL)
+  if (.not.module_is_initialized) call mpp_error (FATAL, 'fv_cmip_diag_mod: module has not been initialized')
 
   n = 1
   isc = Atm(n)%bd%isc; iec = Atm(n)%bd%iec
@@ -700,8 +697,7 @@ end subroutine fv_cmip_diag
 subroutine fv_cmip_diag_end
 
   if (.not. module_is_initialized) then
-    call error_mesg ('fv_cmip_diag_mod', &
-                     'module is not initialized, nothing to deallocate', WARNING)
+    call mpp_error (WARNING, 'fv_cmip_diag_mod: module is not initialized, nothing to deallocate')
     return
   endif
 

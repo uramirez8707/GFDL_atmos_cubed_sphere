@@ -21,9 +21,10 @@
 module fv_climate_nudge_mod
 
 use fms_mod,          only: open_namelist_file, check_nml_error,  &
-                            close_file, stdlog, mpp_pe, mpp_root_pe, &
-                            write_version_number, string, error_mesg, &
-                            FATAL, WARNING, NOTE, file_exist
+                            close_file, write_version_number, &
+                            string, file_exist
+use mpp_mod,          only: stdlog, mpp_pe, mpp_root_pe, mpp_error, &
+                            FATAL, WARNING, NOTE
 use mpp_mod,          only: input_nml_file
 use diag_manager_mod, only: register_diag_field, send_data,   &
                             register_static_field
@@ -162,13 +163,11 @@ real :: missing_value = -1.e10
    if (freq > 0) then
        if ( .not.do_u .and. .not.do_v .and. .not.do_t .and. &
             .not.do_q .and. .not.do_ps ) then
-            call error_mesg ('fv_climate_nudge_mod', 'no variables specified '//&
-                             'for override', WARNING)
+            call mpp_error (WARNING, 'fv_climate_nudge_mod: no variables specified for override')
        endif
    else
        if ( do_u .or. do_v .or. do_t .or.  do_q .or. do_ps ) then
-            call error_mesg ('fv_climate_nudge_mod', 'variables specified '//&
-                             'for override when freq = 0', FATAL)
+            call mpp_error (FATAL, 'fv_climate_nudge_mod: variables specified for override when freq = 0')
        endif
        freq = 0
    endif
@@ -235,7 +234,7 @@ real :: missing_value = -1.e10
 !--------------------------------------------
 ! initialize input data from file
 ! get the size of the global data
-  call error_mesg ('fv_climate_nudge_mod', 'initializing nudging', NOTE)
+  call mpp_error (NOTE, 'fv_climate_nudge_mod: initializing nudging')
   call read_climate_nudge_data_init (nlon_obs, nlat_obs, nlev_obs, ntime_obs)
   if (verbose .gt. 1 .and. mpp_pe() .eq. mpp_root_pe()) then
      print '(a,4i10)', 'fv_climate_nudge: nlon_obs, nlat_obs, nlev_obs, ntime_obs = ', &
@@ -325,7 +324,7 @@ character(len=256) :: err_msg
 logical :: virtual_temp_obs = .false.
 
    if (.not.module_is_initialized) then
-       call error_mesg ('fv_climate_nudge_mod', 'module not initialized', FATAL)
+       call mpp_error (FATAL, 'fv_climate_nudge_mod: module not initialized')
    endif
 
  ! is it time for data forcing
@@ -367,7 +366,7 @@ logical :: virtual_temp_obs = .false.
   ! get the time indices needed
     call time_interp (Time, Timelist, wght(2), itime(1), itime(2), err_msg=err_msg)
     if(err_msg /= '') then
-       call error_mesg('fv_climate_nudge_mod',trim(err_msg), FATAL)
+       call mpp_error(FATAL, 'fv_climate_nudge_mod: 'trim(err_msg))
     endif
 
     wght(1) = 1. - wght(2)
@@ -702,8 +701,7 @@ type(var_state_type), intent(in)  :: State2
    if (State1%is /= State2%is .or. State1%ie /= State2%ie .or. &
        State1%js /= State2%js .or. State1%je /= State2%je .or. &
        State1%npz /= State2%npz) then
-            call error_mesg ('fv_climate_nudge_mod', 'invalid var_state assignment: '// &
-                             'dimensions must match', FATAL)
+            call mpp_error (FATAL, 'fv_climate_nudge_mod: invalid var_state assignment: dimensions must match')
    endif
 
  ! copy data - must be allocated

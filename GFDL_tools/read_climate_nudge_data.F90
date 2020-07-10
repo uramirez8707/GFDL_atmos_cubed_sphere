@@ -21,8 +21,9 @@
 module read_climate_nudge_data_mod
 
 use fms_mod, only: open_namelist_file, check_nml_error, close_file, &
-                   stdlog, mpp_pe, mpp_root_pe, write_version_number, &
-                   string, error_mesg, FATAL, NOTE, file_exist
+                   write_version_number, string, file_exist
+use mpp_mod, only: stdlog, mpp_pe, mpp_root_pe
+                   FATAL, NOTE, mpp_error
 use mpp_mod, only: input_nml_file
 use mpp_io_mod,    only: mpp_open, MPP_NETCDF, MPP_RDONLY,MPP_MULTI, MPP_SINGLE
 use mpp_io_mod,    only: axistype, fieldtype, mpp_get_time_axis, mpp_get_atts
@@ -238,12 +239,11 @@ type(axistype), save:: time_axis
 character(len=32) :: default_calendar
 
    if (.not.module_is_initialized) then
-     call error_mesg ('read_climate_nudge_data_mod/read_time',  &
-                                        'module not initialized', FATAL)
+     call mpp_error (FATAL, 'read_climate_nudge_data_mod/read_time: module not initialized')
    endif
 
    if (size(times(:)) < numtime) then
-      call error_mesg ('read_climate_nudge_data_mod', 'argument times too small in read_time', FATAL)
+      call mpp_error (FATAL, 'read_climate_nudge_data_mod: argument times too small in read_time')
    endif
 
  ! data
@@ -275,8 +275,7 @@ real, intent(out), dimension(:) :: lon, lat, ak, bk
  integer :: istat
 
    if (.not.module_is_initialized) then
-     call error_mesg ('read_climate_nudge_data_mod/read_grid',  &
-                                        'module not initialized', FATAL)
+     call mpp_error (FATAL, 'read_climate_nudge_data_mod/read_grid: module not initialized')
    endif
 
 
@@ -315,8 +314,7 @@ subroutine read_sub_domain_init ( ylo, yhi, ydat, js, je )
  integer :: j
 
    if (.not.module_is_initialized) then
-     call error_mesg ('read_climate_nudge_data_mod/read_sub_domain_init',  &
-                                        'module not initialized', FATAL)
+     call mpp_error (FATAL, 'read_climate_nudge_data_mod/read_sub_domain_init: module not initialized')
    endif
    ! increasing data
    if (ydat(1) < ydat(2)) then
@@ -350,7 +348,7 @@ subroutine read_sub_domain_init ( ylo, yhi, ydat, js, je )
 
    ! decreasing data (may not work)
    else
-      call error_mesg ('read_climate_nudge_data_mod', 'latitude values for observational data decrease with increasing index', NOTE)
+      call mpp_error (NOTE, 'read_climate_nudge_data_mod: latitude values for observational data decrease with increasing index')
       je = size(ydat(:))-1
       do j = 1, size(ydat(:))-1
          if (ylo >= ydat(j+1) .and. ylo <= ydat(j)) then
@@ -384,12 +382,11 @@ integer :: istat, atime, n, this_index
 integer :: nread(4), start(4)
 
    if (.not.module_is_initialized) then
-     call error_mesg ('read_climate_nudge_data_mod',  &
-                                        'module not initialized', FATAL)
+     call mpp_error (FATAL, 'read_climate_nudge_data_mod: module not initialized')
    endif
      ! time index check
       if (itime < 1 .or. itime > numtime) then
-         call error_mesg ('read_climate_nudge_data_mod', 'itime out of range', FATAL)
+         call mpp_error (FATAL, 'read_climate_nudge_data_mod: itime out of range')
       endif
 
      ! check dimensions
@@ -398,12 +395,12 @@ integer :: nread(4), start(4)
             size(dat,2) .ne. sub_domain_latitude_size) then
             !write (*,'(a)') 'climate_nudge_data_mod: size dat2d = '//trim(string(size(dat,1)))//' x '//trim(string(size(dat,2)))// &
             !         '  <-vs->  '//trim(string(global_axis_size(INDEX_LON)))//' x '//trim(string(sub_domain_latitude_size))
-            call error_mesg ('read_climate_nudge_data_mod', 'incorrect 2d array dimensions', FATAL)
+            call mpp_error (FATAL, 'read_climate_nudge_data_mod: incorrect 2d array dimensions')
         endif
      else
         if (size(dat,1) .ne. global_axis_size(INDEX_LON) .or. &
             size(dat,2) .ne. global_axis_size(INDEX_LAT))     &
-            call error_mesg ('read_climate_nudge_data_mod', 'incorrect 2d array dimensions', FATAL)
+            call mpp_error (FATAL, 'read_climate_nudge_data_mod: incorrect 2d array dimensions')
      endif
 
      ! check field
@@ -412,7 +409,7 @@ integer :: nread(4), start(4)
      else if (field .eq. 'psrf') then
         this_index = INDEX_PS
      else
-         call error_mesg ('read_climate_nudge_data_mod', 'incorrect field requested in read_climate_nudge_data_2d', FATAL)
+         call mpp_error (FATAL, 'read_climate_nudge_data_mod: incorrect field requested in read_climate_nudge_data_2d')
      endif
 
      ! file index and actual time index in file
@@ -452,13 +449,12 @@ integer :: istat, atime, n, this_index, start(4), nread(4)
 !logical :: convert_virt_temp = .false.
 
    if (.not.module_is_initialized) then
-     call error_mesg ('read_climate_nudge_data_mod',  &
-                                        'module not initialized', FATAL)
+     call mpp_error (FATAL, 'read_climate_nudge_data_mod: module not initialized')
    endif
 
      ! time index check
      if (itime < 1 .or. itime > numtime) then
-        call error_mesg ('read_climate_nudge_data_mod', 'itime out of range', FATAL)
+        call mpp_error (FATAL, 'read_climate_nudge_data_mod: itime out of range')
      endif
 
      ! check dimensions
@@ -468,13 +464,13 @@ integer :: istat, atime, n, this_index, start(4), nread(4)
             size(dat,3) .ne. global_axis_size(INDEX_LEV)) then
             !write (*,'(a)') 'climate_nudge_data_mod: size dat3d = '//trim(string(size(dat,1)))//' x '//trim(string(size(dat,2)))// &
             !                                        ' x '//trim(string(size(dat,3)))
-            call error_mesg ('read_climate_nudge_data_mod', 'incorrect 3d array dimensions', FATAL)
+            call mpp_error (FATAL, 'read_climate_nudge_data_mod: incorrect 3d array dimensions')
         endif
      else
         if (size(dat,1) .ne. global_axis_size(INDEX_LON) .or. &
             size(dat,2) .ne. global_axis_size(INDEX_LAT) .or. &
             size(dat,3) .ne. global_axis_size(INDEX_LEV))     &
-            call error_mesg ('read_climate_nudge_mod', 'incorrect 3d array dimensions', FATAL)
+            call mpp_error (FATAL, 'read_climate_nudge_mod: incorrect 3d array dimensions')
      endif
 
      ! check field
@@ -487,7 +483,7 @@ integer :: istat, atime, n, this_index, start(4), nread(4)
      else if (field .eq. 'vwnd') then
         this_index = INDEX_V
      else
-        call error_mesg ('read_climate_nudge_data_mod', 'incorrect field requested in read_climate_nudge_data_3d', FATAL)
+        call mpp_error (FATAL, 'read_climate_nudge_data_mod: incorrect field requested in read_climate_nudge_data_3d')
      endif
 
 
@@ -537,7 +533,7 @@ end subroutine read_climate_nudge_data_end
    ! once the axis size is set all subsuquent axes must be the same
    if (global_axis_size(ind) .gt. 0) then
       if (global_axis_size(ind) .ne. lendim) then
-         call error_mesg ('read_climate_nudge_data_mod', 'incorrect axis size for axis = '//trim(required_axis_names(ind)), FATAL)
+         call mpp_error (FATAL, 'read_climate_nudge_data_mod: incorrect axis size for axis = '//trim(required_axis_names(ind)))
       endif
    else
       global_axis_size(ind) = lendim
@@ -551,17 +547,17 @@ end subroutine read_climate_nudge_data_end
  integer, intent(in) :: axis_len(:)
 
    if (size(axis_len(:)) .lt. 2) then
-      call error_mesg ('read_climate_nudge_data_mod', 'incorrect number of array dimensions', FATAL)
+      call mpp_error (FATAL, 'read_climate_nudge_data_mod: incorrect number of array dimensions')
    endif
    if (axis_len(1) .ne. global_axis_size(INDEX_LON)) then
-      call error_mesg ('read_climate_nudge_data_mod', 'incorrect array dimension one', FATAL)
+      call mpp_error (FATAL, 'read_climate_nudge_data_mod: incorrect array dimension one')
    endif
    if (axis_len(2) .ne. global_axis_size(INDEX_LAT)) then
-      call error_mesg ('read_climate_nudge_data_mod', 'incorrect array dimension two', FATAL)
+      call mpp_error (FATAL, 'read_climate_nudge_data_mod: incorrect array dimension two')
    endif
    if (size(axis_len(:)) .gt. 3) then
       if (axis_len(3) .ne. global_axis_size(INDEX_LEV)) then
-         call error_mesg ('read_climate_nudge_data_mod', 'incorrect array dimension three', FATAL)
+         call mpp_error (FATAL, 'read_climate_nudge_data_mod: incorrect array dimension three')
       endif
    endif
 
