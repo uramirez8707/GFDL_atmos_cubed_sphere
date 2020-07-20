@@ -26,7 +26,7 @@
 
 #if defined(SPMD)
 ! !USES:
-      use fms_mod,         only : fms_end
+      use fms_mod,         only : fms_init, fms_end
       use mpp_mod,         only : FATAL, MPP_DEBUG, NOTE, MPP_CLOCK_SYNC,MPP_CLOCK_DETAILED, WARNING
       use mpp_mod,         only : mpp_pe, mpp_npes, mpp_node, mpp_root_pe, mpp_error, mpp_set_warn_level
       use mpp_mod,         only : mpp_declare_pelist, mpp_set_current_pelist, mpp_sync

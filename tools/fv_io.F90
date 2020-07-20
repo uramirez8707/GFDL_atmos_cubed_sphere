@@ -33,9 +33,10 @@ module fv_io_mod
   ! for the model.
   !</DESCRIPTION>
 
+  use fms_mod,                 only: file_exist
   use fms_io_mod,              only: restart_file_type, set_domain, &
                                      fms_io_register_restart_field => register_restart_field, &
-                                     save_restart_border, restore_state_border
+                                     save_restart_border, restore_state_border, field_exist
   use fms2_io_mod,             only: FmsNetcdfFile_t, FmsNetcdfDomainFile_t, &
                                      register_restart_field, register_axis, unlimited, &
                                      open_file, read_restart, write_restart,close_file, &

@@ -20,10 +20,9 @@
 !***********************************************************************
  module fv_surf_map_mod
 
-      use fms_mod,           only: check_nml_error,            &
-                                   open_namelist_file, close_file 
-      use mpp_mod,           only: stdlog, mpp_pe, mpp_root_pe, FATAL
-      use fms2_io_mod,       only: file_exists
+      use fms_mod,           only: file_exist, check_nml_error,            &
+                                   open_namelist_file, close_file, stdlog, &
+                                   mpp_pe, mpp_root_pe, FATAL, error_mesg
       use mpp_mod,           only: get_unit, input_nml_file, mpp_error
       use mpp_domains_mod,   only: mpp_update_domains, domain2d
       use constants_mod,     only: grav, radius, pi=>pi_8
@@ -176,7 +175,7 @@
 !
 ! surface file must be in NetCDF format
 !
-      if ( file_exists(surf_file) ) then
+      if ( file_exist(surf_file) ) then
          if (surf_format == "netcdf") then
 
           status = nf_open (surf_file, NF_NOWRITE, ncid)
@@ -203,10 +202,10 @@
           endif
 
        else
-          call mpp_error ( FATAL, 'surfdrv: Raw IEEE data format no longer supported !!!' )
+          call error_mesg ( 'surfdrv','Raw IEEE data format no longer supported !!!', FATAL )
        endif
     else
-       call mpp_error ( FATAL, 'surfdrv: surface file '//trim(surf_file)//' not found !' )
+       call error_mesg ( 'surfdrv','surface file '//trim(surf_file)//' not found !', FATAL )
     endif
 
       allocate ( lat1(nlat+1) )
