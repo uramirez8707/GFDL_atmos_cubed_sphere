@@ -2062,6 +2062,7 @@ contains
           if( idiag%id_tm>0 .or. idiag%id_any_hght>0 .or. idiag%id_ppt>0) then
 
              allocate( a3(isc:iec,jsc:jec,nplev) )
+             a3 = 0.
 
              idg(:) = idiag%id_h(:)
 
