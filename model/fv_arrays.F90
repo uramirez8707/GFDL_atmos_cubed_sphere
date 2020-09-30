@@ -638,7 +638,9 @@ module fv_arrays_mod
 
      !These are for tracer flux BCs
      logical :: do_flux_BCs, do_2way_flux_BCs !For a parent grid; determine whether there is a need to send BCs
-     type(restart_file_type) :: BCfile_ne, BCfile_sw
+     type(FmsNetcdfFile_t) :: BCfile_ne, BCfile_sw
+     logical :: BCfile_ne_is_open=.false.
+     logical :: BCfile_sw_is_open=.false.
   end type fv_nest_type
 
   type phys_diag_type

@@ -185,17 +185,16 @@ contains
 
        !if (Atm(n)%neststruct%nested) call fv_io_register_restart_BCs(Atm(n)) !TODO put into fv_io_register_restart
 
-       if (Atm(n)%neststruct%nested .and. n==this_grid) then
+       !if (Atm(n)%neststruct%nested .and. n==this_grid) then
            !--- set the 'nestXX' appendix for all files using fms_io and not fms2io
-           if (Atm(n)%grid_number > 1) then
-               write(gnn,'(A4, I2.2)') "nest", Atm(n)%grid_number
-           else
-               gnn = ''
-           end if
-           call set_filename_appendix(gnn)
+       !        write(gnn,'(A4, I2.2)') "nest", Atm(n)%grid_number
+       !    else
+       !        gnn = ''
+       !    end if
+       !    call set_filename_appendix(gnn)
 
-           call fv_io_register_restart_BCs(Atm(n)) !TODO put into fv_io_register_restart
-       endif
+       !    call fv_io_register_restart_BCs(Atm(n)) !TODO put into fv_io_register_restart
+       !endif
 
        !3preN. Topography BCs for nest, including setup for blending
 

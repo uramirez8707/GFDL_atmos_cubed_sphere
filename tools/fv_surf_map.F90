@@ -20,9 +20,10 @@
 !***********************************************************************
  module fv_surf_map_mod
 
-      use fms_mod,           only: file_exist, check_nml_error,            &
+      use fms_mod,           only: check_nml_error,            &
                                    open_namelist_file, close_file, stdlog, &
                                    mpp_pe, mpp_root_pe, FATAL, error_mesg
+      use fms2_io_mod,       only: file_exists
       use mpp_mod,           only: get_unit, input_nml_file, mpp_error
       use mpp_domains_mod,   only: mpp_update_domains, domain2d
       use constants_mod,     only: grav, radius, pi=>pi_8
@@ -175,7 +176,7 @@
 !
 ! surface file must be in NetCDF format
 !
-      if ( file_exist(surf_file) ) then
+      if ( file_exists(surf_file) ) then
          if (surf_format == "netcdf") then
 
           status = nf_open (surf_file, NF_NOWRITE, ncid)

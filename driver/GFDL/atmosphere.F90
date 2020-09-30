@@ -34,7 +34,7 @@ use atmos_co2_mod,         only: atmos_co2_rad, co2_radiation_override
 use block_control_mod,     only: block_control_type
 use constants_mod,         only: cp_air, rdgas, grav, rvgas, kappa, pstd_mks
 use time_manager_mod,      only: time_type, get_time, set_time, operator(+)
-use fms_mod,               only: file_exist, open_namelist_file,    &
+use fms_mod,               only: open_namelist_file,    &
                                  close_file, error_mesg, FATAL,     &
                                  check_nml_error, stdlog,           &
                                  write_version_number,              &
@@ -42,6 +42,7 @@ use fms_mod,               only: file_exist, open_namelist_file,    &
                                  mpp_clock_id, mpp_clock_begin,     &
                                  mpp_clock_end, CLOCK_SUBCOMPONENT, &
                                  clock_flag_default, nullify_domain
+use fms2_io_mod,           only: file_exists
 use mpp_mod,               only: mpp_error, FATAL, NOTE, input_nml_file, &
                                  mpp_npes, mpp_get_current_pelist, &
                                  mpp_set_current_pelist, stdout, &
@@ -206,7 +207,7 @@ contains
 
 !----- initialize FV dynamical core -----
    !NOTE do we still need the second file_exist call?
-   cold_start = (.not.file_exist('INPUT/fv_core.res.nc') .and. .not.file_exist('INPUT/fv_core.res.tile1.nc'))
+   cold_start = (.not.file_exists('INPUT/fv_core.res.nc') .and. .not.file_exists('INPUT/fv_core.res.tile1.nc'))
 
    call fv_control_init( Atm, dt_atmos, mygrid, grids_on_this_pe, p_split )  ! allocates Atm components; sets mygrid
 

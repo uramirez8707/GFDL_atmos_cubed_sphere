@@ -39,9 +39,10 @@ module fv_io_mod
                                      save_restart_border, restore_state_border, field_exist
   use fms2_io_mod,             only: FmsNetcdfFile_t, FmsNetcdfDomainFile_t, &
                                      register_restart_field, register_axis, unlimited, &
-                                     open_file, read_restart, write_restart,close_file, &
-                                     register_field, write_data, get_global_io_domain_indices, &
-                                     register_variable_attribute, variable_exists, read_data
+                                     open_file, read_restart, read_restart_bc, write_restart, &
+                                     write_restart_bc, close_file, register_field, write_data, &
+                                     get_global_io_domain_indices, register_variable_attribute, &
+                                     variable_exists, read_data
   use mpp_mod,                 only: mpp_error, FATAL, NOTE, WARNING, mpp_root_pe, &
                                      mpp_sync, mpp_pe, mpp_declare_pelist
   use mpp_domains_mod,         only: domain2d, EAST, WEST, NORTH, CENTER, SOUTH, CORNER, &
@@ -126,7 +127,7 @@ contains
       call register_axis(file_obj, axisname, 'X', domain_position=xpos(i))
       if (.not. file_obj%is_readonly) then !if writing file
         call register_field(file_obj, axisname, "double", (/axisname/))
-        call register_variable_attribute(file_obj,axisname, "axis", "X")
+        call register_variable_attribute(file_obj,axisname, "axis", "X", str_len=1)
         call get_global_io_domain_indices(file_obj, axisname, is, ie, buffer)
         call write_data(file_obj, axisname, buffer)
       endif
@@ -140,7 +141,7 @@ contains
       call register_axis(file_obj, axisname, 'Y', domain_position=ypos(i))
       if (.not. file_obj%is_readonly) then !if writing file
         call register_field(file_obj, axisname, "double", (/axisname/))
-        call register_variable_attribute(file_obj,axisname, "axis", "Y")
+        call register_variable_attribute(file_obj,axisname, "axis", "Y", str_len=1)
         call get_global_io_domain_indices(file_obj, axisname, is, ie, buffer)
         call write_data(file_obj, axisname, buffer)
       endif
@@ -154,7 +155,7 @@ contains
         call register_axis(file_obj, axisname, zsize(i))
         if (.not. file_obj%is_readonly) then !if writing file
           call register_field(file_obj, axisname, "double", (/axisname/))
-          call register_variable_attribute(file_obj,axisname, "axis", "Z")
+          call register_variable_attribute(file_obj,axisname, "axis", "Z", str_len=1)
           if (allocated(buffer)) deallocate(buffer)
           allocate(buffer(zsize(i)))
           do j = 1, zsize(i)
@@ -169,9 +170,11 @@ contains
     call register_axis(file_obj, "Time", unlimited)
     if (.not. file_obj%is_readonly) then !if writing file
        call register_field(file_obj, "Time", "double", (/"Time"/))
-       call register_variable_attribute(file_obj, "Time", "cartesian_axis", "T")
-       call register_variable_attribute(file_obj, "Time", "units", "time level")
-       call register_variable_attribute(file_obj, "Time", "long_name", "Time")
+       call register_variable_attribute(file_obj, "Time", "cartesian_axis", "T", str_len=1)
+       call register_variable_attribute(file_obj, "Time", "units", "time level", &
+                                        str_len=len("time level"))
+       call register_variable_attribute(file_obj, "Time", "long_name", "Time", &
+                                        str_len=len("Time"))
        call write_data(file_obj, "Time", 1)
     endif
 
@@ -224,7 +227,7 @@ contains
        call register_axis(Atm%Fv_restart, "Time", unlimited)
        if (.not. Atm%Fv_restart%is_readonly) then !if writing file
           call register_field(Atm%Fv_restart, "xaxis_1", "double", (/"xaxis_1"/))
-          call register_variable_attribute(Atm%Fv_restart,"xaxis_1", "axis", "X")
+          call register_variable_attribute(Atm%Fv_restart,"xaxis_1", "axis", "X", str_len=1)
           if (allocated(buffer)) deallocate(buffer)
           allocate(buffer(size(Atm%ak(:), 1)))
           do j = 1, size(Atm%ak(:), 1)
@@ -233,9 +236,9 @@ contains
           call write_data(Atm%Fv_restart, "xaxis_1", buffer)
           deallocate(buffer)
           call register_field(Atm%Fv_restart, "Time", "double", (/"Time"/))
-          call register_variable_attribute(Atm%Fv_restart, dim_names_2d(2), "cartesian_axis", "T")
-          call register_variable_attribute(Atm%Fv_restart, dim_names_2d(2), "units", "time level")
-          call register_variable_attribute(Atm%Fv_restart, dim_names_2d(2), "long_name", dim_names_2d(2))
+          call register_variable_attribute(Atm%Fv_restart, dim_names_2d(2), "cartesian_axis", "T", str_len=1)
+          call register_variable_attribute(Atm%Fv_restart, dim_names_2d(2), "units", "time level", str_len=len("time level"))
+          call register_variable_attribute(Atm%Fv_restart, dim_names_2d(2), "long_name", dim_names_2d(2), str_len=len(dim_names_2d(2)))
           call write_data(Atm%Fv_restart, "Time", 1)
        endif
        call register_restart_field (Atm%Fv_restart, 'ak', Atm%ak(:), dim_names_2d)
@@ -804,7 +807,7 @@ contains
   subroutine register_bcs_2d(Atm, BCfile_ne, BCfile_sw, fname_ne, fname_sw, &
                              var_name, var, var_bc, istag, jstag)
     type(fv_atmos_type),      intent(in)    :: Atm
-    type(restart_file_type),  intent(inout) :: BCfile_ne, BCfile_sw
+    type(FmsNetcdfFile_t),  intent(inout) :: BCfile_ne, BCfile_sw
     character(len=120),       intent(in)    :: fname_ne, fname_sw
     character(len=*),         intent(in)    :: var_name
     real, dimension(:,:),     intent(in), optional :: var
@@ -862,13 +865,13 @@ contains
     is_root_pe = .FALSE.
     if (is.eq.1 .and. js.eq.1) is_root_pe = .TRUE.
 !register west halo data in t1
-    if (present(var_bc)) id_restart = fms_io_register_restart_field(BCfile_sw, trim(fname_sw), &
+    if (present(var_bc) .and. Atm%neststruct%BCfile_sw_is_open) call register_restart_field(BCfile_sw, &
                                         trim(var_name)//'_west_t1', &
                                         var_bc%west_t1, &
                                         indices, global_size, y2_pelist, &
                                         is_root_pe, jshift=y_halo)
 !register west prognostic halo data
-    if (present(var)) id_restart = fms_io_register_restart_field(BCfile_sw, trim(fname_sw), &
+    if (present(var) .and. Atm%neststruct%BCfile_sw_is_open) call register_restart_field(BCfile_sw, &
                                         trim(var_name)//'_west', &
                                         var, indices, global_size, &
                                         y2_pelist, is_root_pe, jshift=y_halo)
@@ -877,7 +880,7 @@ contains
     is_root_pe = .FALSE.
     if (ie.eq.npx-1 .and. je.eq.npy-1) is_root_pe = .TRUE.
 !register east halo data in t1
-    if (present(var_bc)) id_restart = fms_io_register_restart_field(BCfile_ne, trim(fname_ne), &
+    if (present(var_bc) .and. Atm%neststruct%BCfile_ne_is_open) call register_restart_field(BCfile_ne, &
                                         trim(var_name)//'_east_t1', &
                                         var_bc%east_t1, &
                                         indices, global_size, y1_pelist, &
@@ -887,7 +890,7 @@ contains
     indices(1) = ied-x_halo+1+i_stag
     indices(2) = ied+i_stag
 !register east prognostic halo data
-    if (present(var)) id_restart = fms_io_register_restart_field(BCfile_ne, trim(fname_ne), &
+    if (present(var) .and. Atm%neststruct%BCfile_ne_is_open) call register_restart_field(BCfile_ne, &
                                         trim(var_name)//'_east', &
                                         var, indices, global_size, &
                                         y1_pelist, is_root_pe, jshift=y_halo, &
@@ -911,13 +914,13 @@ contains
     is_root_pe = .FALSE.
     if (is.eq.1 .and. js.eq.1) is_root_pe = .TRUE.
 !register south halo data in t1
-    if (present(var_bc)) id_restart = fms_io_register_restart_field(BCfile_sw, trim(fname_sw), &
+    if (present(var_bc) .and. Atm%neststruct%BCfile_sw_is_open) call register_restart_field(BCfile_sw, &
                                         trim(var_name)//'_south_t1', &
                                         var_bc%south_t1, &
                                         indices, global_size, x2_pelist, &
                                         is_root_pe, x_halo=x_halo_ns)
 !register south prognostic halo data
-    if (present(var)) id_restart = fms_io_register_restart_field(BCfile_sw, trim(fname_sw), &
+    if (present(var) .and. Atm%neststruct%BCfile_sw_is_open) call register_restart_field(BCfile_sw, &
                                         trim(var_name)//'_south', &
                                         var, indices, global_size, &
                                         x2_pelist, is_root_pe, x_halo=x_halo_ns)
@@ -926,7 +929,7 @@ contains
     is_root_pe = .FALSE.
     if (ie.eq.npx-1 .and. je.eq.npy-1) is_root_pe = .TRUE.
 !register north halo data in t1
-    if (present(var_bc)) id_restart = fms_io_register_restart_field(BCfile_ne, trim(fname_ne), &
+    if (present(var_bc) .and. Atm%neststruct%BCfile_ne_is_open) call register_restart_field(BCfile_ne, &
                                         trim(var_name)//'_north_t1', &
                                         var_bc%north_t1, &
                                         indices, global_size, x1_pelist, &
@@ -936,7 +939,7 @@ contains
     indices(3) = jed-y_halo+1+j_stag
     indices(4) = jed+j_stag
 !register north prognostic halo data
-    if (present(var)) id_restart = fms_io_register_restart_field(BCfile_ne, trim(fname_ne), &
+    if (present(var) .and. Atm%neststruct%BCfile_ne_is_open) call register_restart_field(BCfile_ne, &
                                         trim(var_name)//'_north', &
                                         var, indices, global_size, &
                                         x1_pelist, is_root_pe, x_halo=x_halo_ns, &
@@ -948,7 +951,7 @@ contains
   subroutine register_bcs_3d(Atm, BCfile_ne, BCfile_sw, fname_ne, fname_sw, &
                              var_name, var, var_bc, istag, jstag, mandatory)
     type(fv_atmos_type),      intent(in)    :: Atm
-    type(restart_file_type),  intent(inout) :: BCfile_ne, BCfile_sw
+    type(FmsNetcdfFile_t),  intent(inout) :: BCfile_ne, BCfile_sw
     character(len=120),       intent(in)    :: fname_ne, fname_sw
     character(len=*),         intent(in)    :: var_name
     real, dimension(:,:,:),   intent(in), optional :: var
@@ -1008,36 +1011,36 @@ contains
     is_root_pe = .FALSE.
     if (is.eq.1 .and. js.eq.1) is_root_pe = .TRUE.
 !register west halo data in t1
-    if (present(var_bc)) id_restart = fms_io_register_restart_field(BCfile_sw, trim(fname_sw), &
+    if (present(var_bc) .and. Atm%neststruct%BCfile_sw_is_open) call register_restart_field(BCfile_sw, &
                                         trim(var_name)//'_west_t1', &
                                         var_bc%west_t1, &
                                         indices, global_size, y2_pelist, &
-                                        is_root_pe, jshift=y_halo, mandatory=mandatory)
+                                        is_root_pe, jshift=y_halo, is_optional=.not.mandatory)
 !register west prognostic halo data
-    if (present(var)) id_restart = fms_io_register_restart_field(BCfile_sw, trim(fname_sw), &
+    if (present(var) .and. Atm%neststruct%BCfile_sw_is_open) call register_restart_field(BCfile_sw, &
                                         trim(var_name)//'_west', &
                                         var, indices, global_size, &
-                                        y2_pelist, is_root_pe, jshift=y_halo, mandatory=mandatory)
+                                        y2_pelist, is_root_pe, jshift=y_halo, is_optional=.not.mandatory)
 
 !define east root_pe
     is_root_pe = .FALSE.
     if (ie.eq.npx-1 .and. je.eq.npy-1) is_root_pe = .TRUE.
 !register east halo data in t1
-    if (present(var_bc)) id_restart = fms_io_register_restart_field(BCfile_ne, trim(fname_ne), &
+    if (present(var_bc) .and. Atm%neststruct%BCfile_ne_is_open) call register_restart_field(BCfile_ne, &
                                         trim(var_name)//'_east_t1', &
                                         var_bc%east_t1, &
                                         indices, global_size, y1_pelist, &
-                                        is_root_pe, jshift=y_halo, mandatory=mandatory)
+                                        is_root_pe, jshift=y_halo, is_optional=.not.mandatory)
 
 !reset indices for prognostic variables in the east halo
     indices(1) = ied-x_halo+1+i_stag
     indices(2) = ied+i_stag
 !register east prognostic halo data
-    if (present(var)) id_restart = fms_io_register_restart_field(BCfile_ne, trim(fname_ne), &
+    if (present(var) .and. Atm%neststruct%BCfile_ne_is_open) call register_restart_field(BCfile_ne, &
                                         trim(var_name)//'_east', &
                                         var, indices, global_size, &
                                         y1_pelist, is_root_pe, jshift=y_halo, &
-                                        x_halo=(size(var,1)-x_halo), ishift=-(ie+i_stag), mandatory=mandatory)
+                                        x_halo=(size(var,1)-x_halo), ishift=-(ie+i_stag), is_optional=.not.mandatory)
 
 !NORTH & SOUTH
 !set defaults for north/south halo regions
@@ -1058,41 +1061,41 @@ contains
     is_root_pe = .FALSE.
     if (is.eq.1 .and. js.eq.1) is_root_pe = .TRUE.
 !register south halo data in t1
-    if (present(var_bc)) id_restart = fms_io_register_restart_field(BCfile_sw, trim(fname_sw), &
+    if (present(var_bc) .and. Atm%neststruct%BCfile_sw_is_open) call register_restart_field(BCfile_sw, &
                                         trim(var_name)//'_south_t1', &
                                         var_bc%south_t1, &
                                         indices, global_size, x2_pelist, &
-                                        is_root_pe, x_halo=x_halo_ns, mandatory=mandatory)
+                                        is_root_pe, x_halo=x_halo_ns, is_optional=.not.mandatory)
 !register south prognostic halo data
-    if (present(var)) id_restart = fms_io_register_restart_field(BCfile_sw, trim(fname_sw), &
+    if (present(var) .and. Atm%neststruct%BCfile_sw_is_open) call register_restart_field(BCfile_sw, &
                                         trim(var_name)//'_south', &
                                         var, indices, global_size, &
-                                        x2_pelist, is_root_pe, x_halo=x_halo_ns, mandatory=mandatory)
+                                        x2_pelist, is_root_pe, x_halo=x_halo_ns, is_optional=.not.mandatory)
 
 !define north root_pe
     is_root_pe = .FALSE.
     if (ie.eq.npx-1 .and. je.eq.npy-1) is_root_pe = .TRUE.
 !register north halo data in t1
-    if (present(var_bc)) id_restart = fms_io_register_restart_field(BCfile_ne, trim(fname_ne), &
+    if (present(var_bc) .and. Atm%neststruct%BCfile_ne_is_open) call register_restart_field(BCfile_ne, &
                                         trim(var_name)//'_north_t1', &
                                         var_bc%north_t1, &
                                         indices, global_size, x1_pelist, &
-                                        is_root_pe, x_halo=x_halo_ns, mandatory=mandatory)
+                                        is_root_pe, x_halo=x_halo_ns, is_optional=.not.mandatory)
 
 !reset indices for prognostic variables in the north halo
     indices(3) = jed-y_halo+1+j_stag
     indices(4) = jed+j_stag
 !register north prognostic halo data
-    if (present(var)) id_restart = fms_io_register_restart_field(BCfile_ne, trim(fname_ne), &
+    if (present(var) .and. Atm%neststruct%BCfile_ne_is_open) call register_restart_field(BCfile_ne, &
                                         trim(var_name)//'_north', &
                                         var, indices, global_size, &
                                         x1_pelist, is_root_pe, x_halo=x_halo_ns, &
-                                        y_halo=(size(var,2)-y_halo), jshift=-(je+j_stag), mandatory=mandatory)
+                                        y_halo=(size(var,2)-y_halo), jshift=-(je+j_stag), is_optional=.not.mandatory)
 
   end subroutine register_bcs_3d
 
 
-  ! </SUBROUTINE> NAME="fv_io_regsiter_restart_BCs"
+  ! </SUBROUTINE> NAME="fv_io_register_restart_BCs"
   !#####################################################################
 
   subroutine fv_io_register_restart_BCs(Atm)
@@ -1160,11 +1163,45 @@ contains
 
 
   subroutine fv_io_write_BCs(Atm, timestamp)
-    type(fv_atmos_type), intent(inout) :: Atm
+    type(fv_atmos_type), intent(inout)        :: Atm
     character(len=*),    intent(in), optional :: timestamp
+    integer, allocatable, dimension(:)        :: all_pelist
+    integer, dimension(2)                     :: layout
+    integer                                   :: n
+    character(len=1)                   :: tile_num
+    character(len=20)                  :: suffix
+    character(len=120)                 :: fname_ne, fname_sw
 
-    call save_restart_border(Atm%neststruct%BCfile_ne, timestamp)
-    call save_restart_border(Atm%neststruct%BCfile_sw, timestamp)
+    fname_ne = 'fv_BC_ne.res.nc'
+    fname_sw = 'fv_BC_sw.res.nc'
+
+    call mpp_get_layout(Atm%domain, layout)
+    allocate(all_pelist(layout(1)*layout(2)))
+    do n = 1, layout(1)*layout(2)
+      all_pelist(n) = n - 1
+    end do
+
+    !!! If a nested grid, add "nestXX.tileX" to the filename
+    if (Atm%neststruct%nested) then
+       write(tile_num,'(I1)') Atm%neststruct%nestupdate
+       suffix = ''//trim(Atm%nml_filename)//".tile"//trim(tile_num)//""
+       fname_sw = fname_sw(1:len_trim(fname_sw)-2)//trim(suffix)//".nc"
+       fname_sw = fname_sw(1:len_trim(fname_sw)-2)//trim(suffix)//".nc"
+    endif
+
+    Atm%neststruct%BCfile_sw_is_open = open_file(Atm%neststruct%BCfile_sw, fname_sw, "overwrite", is_restart=.true., pelist=all_pelist)
+    Atm%neststruct%BCfile_ne_is_open = open_file(Atm%neststruct%BCfile_ne, fname_ne, "overwrite", is_restart=.true., pelist=all_pelist)
+    call fv_io_register_restart_BCs(Atm) 
+
+    if (Atm%neststruct%BCfile_sw_is_open) then    
+      call write_restart_bc(Atm%neststruct%BCfile_sw)
+      call close_file(Atm%neststruct%BCfile_sw)
+    endif
+
+    if (Atm%neststruct%BCfile_ne_is_open) then
+     call write_restart_bc(Atm%neststruct%BCfile_ne)
+     call close_file(Atm%neststruct%BCfile_ne)
+    endif
 
     return
   end subroutine fv_io_write_BCs
@@ -1172,9 +1209,43 @@ contains
 
   subroutine fv_io_read_BCs(Atm)
     type(fv_atmos_type), intent(inout) :: Atm
+    integer, allocatable, dimension(:) :: all_pelist
+    integer, dimension(2)              :: layout
+    integer                            :: n
+    character(len=1)                   :: tile_num
+    character(len=20)                  :: suffix
+    character(len=120)                 :: fname_ne, fname_sw
 
-    call restore_state_border(Atm%neststruct%BCfile_ne)
-    call restore_state_border(Atm%neststruct%BCfile_sw)
+    fname_ne = 'fv_BC_ne.res.nc'
+    fname_sw = 'fv_BC_sw.res.nc'
+
+    call mpp_get_layout(Atm%domain, layout)
+    allocate(all_pelist(layout(1)*layout(2)))
+    do n = 1, layout(1)*layout(2)
+      all_pelist(n) = n - 1
+    end do
+
+    !!! If a nested grid, add "nestXX.tileX" to the filename
+    if (Atm%neststruct%nested) then
+       write(tile_num,'(I1)') Atm%neststruct%nestupdate
+       suffix = ''//trim(Atm%nml_filename)//".tile"//trim(tile_num)//""
+       fname_sw = fname_sw(1:len_trim(fname_sw)-2)//trim(suffix)//".nc"
+       fname_sw = fname_sw(1:len_trim(fname_sw)-2)//trim(suffix)//".nc"
+    endif
+
+    Atm%neststruct%BCfile_sw_is_open = open_file(Atm%neststruct%BCfile_sw, fname_sw, "read", is_restart=.true., pelist=all_pelist)
+    Atm%neststruct%BCfile_ne_is_open = open_file(Atm%neststruct%BCfile_ne, fname_ne, "read", is_restart=.true., pelist=all_pelist)
+    call fv_io_register_restart_BCs(Atm) 
+
+    if (Atm%neststruct%BCfile_sw_is_open) then    
+      call read_restart_bc(Atm%neststruct%BCfile_sw)
+      call close_file(Atm%neststruct%BCfile_sw)
+    endif
+
+    if (Atm%neststruct%BCfile_ne_is_open) then
+     call read_restart_bc(Atm%neststruct%BCfile_ne)
+     call close_file(Atm%neststruct%BCfile_ne)
+    endif
 
     !These do not work yet
     !need to modify register_bcs_?d to get ids for registered variables, and then use query_initialized_id
