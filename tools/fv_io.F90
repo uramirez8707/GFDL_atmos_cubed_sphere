@@ -946,6 +946,10 @@ contains
                                         x1_pelist, is_root_pe, x_halo=x_halo_ns, &
                                         y_halo=(size(var,2)-y_halo), jshift=-(je+j_stag))
 
+    deallocate (x1_pelist)
+    deallocate (y1_pelist)
+    deallocate (x2_pelist)
+    deallocate (y2_pelist)
   end subroutine register_bcs_2d
 
 
@@ -1093,6 +1097,11 @@ contains
                                         x1_pelist, is_root_pe, x_halo=x_halo_ns, &
                                         y_halo=(size(var,2)-y_halo), jshift=-(je+j_stag), is_optional=.not.mandatory)
 
+    deallocate (x1_pelist)
+    deallocate (y1_pelist)
+    deallocate (x2_pelist)
+    deallocate (y2_pelist)
+
   end subroutine register_bcs_3d
 
 
@@ -1201,6 +1210,8 @@ contains
      call close_file(Atm%neststruct%BCfile_ne)
     endif
 
+    deallocate(all_pelist)
+
     return
   end subroutine fv_io_write_BCs
 
@@ -1249,6 +1260,7 @@ contains
     !Atm%neststruct%delz_BC%initialized = field_exist(fname_ne, 'delz_north_t1', Atm%domain)
     !if (is_master()) print*, ' BCs: ', Atm%neststruct%divg_BC%initialized, Atm%neststruct%w_BC%initialized, Atm%neststruct%delz_BC%initialized
 
+    deallocate(all_pelist)
     return
   end subroutine fv_io_read_BCs
 
