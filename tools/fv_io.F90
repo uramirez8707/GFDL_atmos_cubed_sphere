@@ -44,7 +44,8 @@ module fv_io_mod
                                      get_global_io_domain_indices, register_variable_attribute, &
                                      variable_exists, read_data
   use mpp_mod,                 only: mpp_error, FATAL, NOTE, WARNING, mpp_root_pe, &
-                                     mpp_sync, mpp_pe, mpp_declare_pelist
+                                     mpp_sync, mpp_pe, mpp_declare_pelist, mpp_get_current_pelist, &
+                                     mpp_npes
   use mpp_domains_mod,         only: domain2d, EAST, WEST, NORTH, CENTER, SOUTH, CORNER, &
                                      mpp_get_compute_domain, mpp_get_data_domain, &
                                      mpp_get_layout, mpp_get_ntile_count, &
@@ -1175,11 +1176,8 @@ contains
     fname_ne = 'fv_BC_ne.res.nc'
     fname_sw = 'fv_BC_sw.res.nc'
 
-    call mpp_get_layout(Atm%domain, layout)
-    allocate(all_pelist(layout(1)*layout(2)))
-    do n = 1, layout(1)*layout(2)
-      all_pelist(n) = n - 1
-    end do
+    allocate(all_pelist(mpp_npes()))
+    call mpp_get_current_pelist(all_pelist)
 
     !!! If a nested grid, add "nestXX.tileX" to the filename
     if (Atm%neststruct%nested) then
@@ -1219,11 +1217,8 @@ contains
     fname_ne = 'fv_BC_ne.res.nc'
     fname_sw = 'fv_BC_sw.res.nc'
 
-    call mpp_get_layout(Atm%domain, layout)
-    allocate(all_pelist(layout(1)*layout(2)))
-    do n = 1, layout(1)*layout(2)
-      all_pelist(n) = n - 1
-    end do
+    allocate(all_pelist(mpp_npes()))
+    call mpp_get_current_pelist(all_pelist)
 
     !!! If a nested grid, add "nestXX.tileX" to the filename
     if (Atm%neststruct%nested) then
