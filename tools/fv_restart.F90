@@ -60,7 +60,8 @@ module fv_restart_mod
   use mpp_domains_mod,     only: mpp_global_field
   use fms_mod,             only: file_exist
   use fv_treat_da_inc_mod, only: read_da_inc
-  use fms_io_mod,          only: set_filename_appendix
+  use fms_io_mod,          only: fms_io_set_filename_appendix => set_filename_appendix
+  use fms2_io_mod,         only: fms2_io_set_filename_appendix =>set_filename_appendix
   implicit none
   private
 
@@ -185,16 +186,12 @@ contains
 
        !if (Atm(n)%neststruct%nested) call fv_io_register_restart_BCs(Atm(n)) !TODO put into fv_io_register_restart
 
-       !if (Atm(n)%neststruct%nested .and. n==this_grid) then
-           !--- set the 'nestXX' appendix for all files using fms_io and not fms2io
-       !        write(gnn,'(A4, I2.2)') "nest", Atm(n)%grid_number
-       !    else
-       !        gnn = ''
-       !    end if
-       !    call set_filename_appendix(gnn)
-
-       !    call fv_io_register_restart_BCs(Atm(n)) !TODO put into fv_io_register_restart
-       !endif
+       ! The two calls are needed until everything uses fms2io 
+       if (Atm(n)%neststruct%nested .and. n==this_grid) then
+           write(gnn,'(A4, I2.2)') "nest", Atm(n)%grid_number
+           call fms_io_set_filename_appendix(gnn)
+           call fms2_io_set_filename_appendix(gnn)
+       endif
 
        !3preN. Topography BCs for nest, including setup for blending
 

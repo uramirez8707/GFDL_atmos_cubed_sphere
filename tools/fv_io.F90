@@ -337,11 +337,6 @@ contains
     character(len=1) :: tile_num
 
     suffix = ''
-    ! If this is a nesting case, it will need to append "nestXX" to the filename
-    if (Atm(1)%neststruct%nested) then
-       suffix = '.'//trim(Atm(1)%nml_filename)//''
-    endif
-
     fname = 'INPUT/fv_core.res'//trim(suffix)//'.nc'
     Atm(1)%Fv_restart_is_open = open_file(Atm(1)%Fv_restart,fname,"read", is_restart=.true.)
     if (Atm(1)%Fv_restart_is_open) then
@@ -733,11 +728,6 @@ contains
     endif
 
     suffix = ''
-    ! If this is a nesting case, it will need to append "nestXX" to the filename
-    if (Atm%neststruct%nested) then
-       suffix = '.'//trim(Atm%nml_filename)//''
-    endif
-
     fname = 'RESTART/fv_core.res'//trim(suffix)//'.nc'
     Atm%Fv_restart_is_open = open_file(Atm%Fv_restart, fname, "overwrite", is_restart=.true.)
     if (Atm%Fv_restart_is_open) then
@@ -803,6 +793,7 @@ contains
        call close_file(Atm%Tra_restart)
        Atm%Tra_restart_is_open = .false.
     endif
+
   end subroutine  fv_io_write_restart
 
   subroutine register_bcs_2d(Atm, BCfile_ne, BCfile_sw, fname_ne, fname_sw, &
@@ -1183,22 +1174,13 @@ contains
     integer, dimension(2)                     :: layout
     integer                                   :: n
     character(len=1)                   :: tile_num
-    character(len=20)                  :: suffix
     character(len=120)                 :: fname_ne, fname_sw
 
-    fname_ne = 'fv_BC_ne.res.nc'
-    fname_sw = 'fv_BC_sw.res.nc'
+    fname_ne = 'RESTART/fv_BC_ne.res.nc'
+    fname_sw = 'RESTART/fv_BC_sw.res.nc'
 
     allocate(all_pelist(mpp_npes()))
     call mpp_get_current_pelist(all_pelist)
-
-    !!! If a nested grid, add "nestXX.tileX" to the filename
-    if (Atm%neststruct%nested) then
-       write(tile_num,'(I1)') Atm%neststruct%nestupdate
-       suffix = ''//trim(Atm%nml_filename)//".tile"//trim(tile_num)//""
-       fname_sw = fname_sw(1:len_trim(fname_sw)-2)//trim(suffix)//".nc"
-       fname_sw = fname_sw(1:len_trim(fname_sw)-2)//trim(suffix)//".nc"
-    endif
 
     Atm%neststruct%BCfile_sw_is_open = open_file(Atm%neststruct%BCfile_sw, fname_sw, "overwrite", is_restart=.true., pelist=all_pelist)
     Atm%neststruct%BCfile_ne_is_open = open_file(Atm%neststruct%BCfile_ne, fname_ne, "overwrite", is_restart=.true., pelist=all_pelist)
@@ -1229,19 +1211,11 @@ contains
     character(len=20)                  :: suffix
     character(len=120)                 :: fname_ne, fname_sw
 
-    fname_ne = 'fv_BC_ne.res.nc'
-    fname_sw = 'fv_BC_sw.res.nc'
+    fname_ne = 'INPUT/fv_BC_ne.res.nc'
+    fname_sw = 'INPUT/fv_BC_sw.res.nc'
 
     allocate(all_pelist(mpp_npes()))
     call mpp_get_current_pelist(all_pelist)
-
-    !!! If a nested grid, add "nestXX.tileX" to the filename
-    if (Atm%neststruct%nested) then
-       write(tile_num,'(I1)') Atm%neststruct%nestupdate
-       suffix = ''//trim(Atm%nml_filename)//".tile"//trim(tile_num)//""
-       fname_sw = fname_sw(1:len_trim(fname_sw)-2)//trim(suffix)//".nc"
-       fname_sw = fname_sw(1:len_trim(fname_sw)-2)//trim(suffix)//".nc"
-    endif
 
     Atm%neststruct%BCfile_sw_is_open = open_file(Atm%neststruct%BCfile_sw, fname_sw, "read", is_restart=.true., pelist=all_pelist)
     Atm%neststruct%BCfile_ne_is_open = open_file(Atm%neststruct%BCfile_ne, fname_ne, "read", is_restart=.true., pelist=all_pelist)

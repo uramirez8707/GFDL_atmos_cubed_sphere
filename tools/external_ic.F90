@@ -34,7 +34,6 @@ module external_ic_mod
                                  register_restart_field, register_axis
    use fms_mod,            only: open_namelist_file, check_nml_error, close_nml_file => close_file
    use fms_io_mod,         only: get_tile_string
-   use fms_io_mod,         only: set_filename_appendix
    use mpp_mod,            only: mpp_error, FATAL, NOTE, mpp_pe, mpp_root_pe
    use mpp_mod,            only: stdlog, input_nml_file
    use mpp_parameter_mod,  only: AGRID_PARAM=>AGRID
@@ -460,7 +459,7 @@ contains
         !!! If a nested grid, add "nestXX.tileX" to the filename
         if (Atm%neststruct%nested) then
            write(tile_num,'(I1)') Atm%neststruct%nestupdate
-           suffix = ''//trim(Atm%nml_filename)//".tile"//trim(tile_num)//""
+           suffix = "tile"//trim(tile_num)//""
            fn_sfc_ics = fn_sfc_ics(1:len_trim(fn_sfc_ics)-2)//trim(suffix)//".nc"
            fn_oro_ics = fn_oro_ics(1:len_trim(fn_oro_ics)-2)//trim(suffix)//".nc"
            fn_gfs_ics = fn_gfs_ics(1:len_trim(fn_gfs_ics)-2)//trim(suffix)//".nc"
@@ -1457,7 +1456,7 @@ contains
       !!! If a nested grid, add "nestXX.tileX" to the filename
       if (Atm%neststruct%nested) then
          write(tile_num,'(I1)') Atm%neststruct%nestupdate
-         suffix = ''//trim(Atm%nml_filename)//".tile"//trim(tile_num)//""
+         suffix = ".tile"//trim(tile_num)//""
          fn_oro_ics = fn_oro_ics(1:len_trim(fn_oro_ics)-2)//trim(suffix)//".nc"
          fn_gfs_ics = fn_gfs_ics(1:len_trim(fn_gfs_ics)-2)//trim(suffix)//".nc"
       endif
