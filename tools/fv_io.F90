@@ -971,6 +971,10 @@ contains
     integer, allocatable, dimension(:) :: x1_pelist, y1_pelist
     integer, allocatable, dimension(:) :: x2_pelist, y2_pelist
     logical :: is_root_pe
+    logical :: mandatory_flag
+
+    mandatory_flag = .true.
+    if (present(mandatory)) mandatory_flag = mandatory
 
     i_stag = 0
     j_stag = 0
@@ -1020,12 +1024,12 @@ contains
                                         trim(var_name)//'_west_t1', &
                                         var_bc%west_t1, &
                                         indices, global_size, y2_pelist, &
-                                        is_root_pe, jshift=y_halo, is_optional=.not.mandatory)
+                                        is_root_pe, jshift=y_halo, is_optional=.not.mandatory_flag)
 !register west prognostic halo data
     if (present(var) .and. Atm%neststruct%BCfile_sw_is_open) call register_restart_field(BCfile_sw, &
                                         trim(var_name)//'_west', &
                                         var, indices, global_size, &
-                                        y2_pelist, is_root_pe, jshift=y_halo, is_optional=.not.mandatory)
+                                        y2_pelist, is_root_pe, jshift=y_halo, is_optional=.not.mandatory_flag)
 
 !define east root_pe
     is_root_pe = .FALSE.
@@ -1035,7 +1039,7 @@ contains
                                         trim(var_name)//'_east_t1', &
                                         var_bc%east_t1, &
                                         indices, global_size, y1_pelist, &
-                                        is_root_pe, jshift=y_halo, is_optional=.not.mandatory)
+                                        is_root_pe, jshift=y_halo, is_optional=.not.mandatory_flag)
 
 !reset indices for prognostic variables in the east halo
     indices(1) = ied-x_halo+1+i_stag
@@ -1045,7 +1049,7 @@ contains
                                         trim(var_name)//'_east', &
                                         var, indices, global_size, &
                                         y1_pelist, is_root_pe, jshift=y_halo, &
-                                        x_halo=(size(var,1)-x_halo), ishift=-(ie+i_stag), is_optional=.not.mandatory)
+                                        x_halo=(size(var,1)-x_halo), ishift=-(ie+i_stag), is_optional=.not.mandatory_flag)
 
 !NORTH & SOUTH
 !set defaults for north/south halo regions
@@ -1070,12 +1074,12 @@ contains
                                         trim(var_name)//'_south_t1', &
                                         var_bc%south_t1, &
                                         indices, global_size, x2_pelist, &
-                                        is_root_pe, x_halo=x_halo_ns, is_optional=.not.mandatory)
+                                        is_root_pe, x_halo=x_halo_ns, is_optional=.not.mandatory_flag)
 !register south prognostic halo data
     if (present(var) .and. Atm%neststruct%BCfile_sw_is_open) call register_restart_field(BCfile_sw, &
                                         trim(var_name)//'_south', &
                                         var, indices, global_size, &
-                                        x2_pelist, is_root_pe, x_halo=x_halo_ns, is_optional=.not.mandatory)
+                                        x2_pelist, is_root_pe, x_halo=x_halo_ns, is_optional=.not.mandatory_flag)
 
 !define north root_pe
     is_root_pe = .FALSE.
@@ -1085,7 +1089,7 @@ contains
                                         trim(var_name)//'_north_t1', &
                                         var_bc%north_t1, &
                                         indices, global_size, x1_pelist, &
-                                        is_root_pe, x_halo=x_halo_ns, is_optional=.not.mandatory)
+                                        is_root_pe, x_halo=x_halo_ns, is_optional=.not.mandatory_flag)
 
 !reset indices for prognostic variables in the north halo
     indices(3) = jed-y_halo+1+j_stag
@@ -1095,7 +1099,7 @@ contains
                                         trim(var_name)//'_north', &
                                         var, indices, global_size, &
                                         x1_pelist, is_root_pe, x_halo=x_halo_ns, &
-                                        y_halo=(size(var,2)-y_halo), jshift=-(je+j_stag), is_optional=.not.mandatory)
+                                        y_halo=(size(var,2)-y_halo), jshift=-(je+j_stag), is_optional=.not.mandatory_flag)
 
     deallocate (x1_pelist)
     deallocate (y1_pelist)
